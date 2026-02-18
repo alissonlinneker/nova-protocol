@@ -33,6 +33,7 @@ pub mod consensus;
 pub mod gossip;
 pub mod mempool;
 pub mod node;
+pub mod producer;
 pub mod rpc;
 pub mod sync;
 
@@ -43,5 +44,6 @@ pub use consensus::{
 pub use gossip::{GossipAction, GossipConfig, GossipMessage, GossipProtocol, PeerInfo};
 pub use mempool::{Mempool, MempoolConfig, MempoolEntry, MempoolError};
 pub use node::{NodeStatus, ValidatorNode};
+pub use producer::{BlockProducer, BlockProductionError, ProducedBlock, TxResult};
 pub use rpc::{RpcError, RpcMethod, RpcRequest, RpcResponse};
 pub use sync::{SyncProtocol, SyncRequest, SyncResponse};
