@@ -1,6 +1,6 @@
 # =============================================================================
 # NOVA Protocol — Local Development Environment
-# Spins up a 4-validator devnet, API gateway, and block explorer.
+# Spins up a 4-validator devnet, API gateway, block explorer, and wallet.
 #
 # Usage:
 #   docker compose -f docker/docker-compose.yml up -d
@@ -20,16 +20,22 @@ x-node-defaults: &node-defaults
     interval: 15s
     timeout: 5s
     start_period: 30s
-    retries: 3
+    retries: 5
 
 services:
   # --------------------------------------------------------------------------
   # Validator Nodes
+  #
+  # Each node runs in --dev --validator mode so it gets pre-funded test
+  # accounts and participates in single-node consensus. The RPC/P2P/metrics
+  # addresses are configured through environment variables that map to clap
+  # env annotations in the CLI.
   # --------------------------------------------------------------------------
   nova-node-1:
     <<: *node-defaults
     container_name: nova-node-1
     hostname: nova-node-1
+    command: ["run", "--dev", "--validator", "--data-dir", "/data"]
     ports:
       - "8080:8080"   # RPC
       - "9090:9090"   # P2P
@@ -42,7 +48,6 @@ services:
       NOVA_RPC_ADDR: "0.0.0.0:8080"
       NOVA_METRICS_ADDR: "0.0.0.0:9100"
       NOVA_VALIDATORS: "nova-node-1:9090,nova-node-2:9090,nova-node-3:9090,nova-node-4:9090"
-      NOVA_GENESIS_PATH: "/data/genesis.json"
       NOVA_LOG_LEVEL: "debug"
       RUST_LOG: "debug"
 
@@ -50,6 +55,7 @@ services:
     <<: *node-defaults
     container_name: nova-node-2
     hostname: nova-node-2
+    command: ["run", "--dev", "--validator", "--data-dir", "/data"]
     ports:
       - "8081:8080"
       - "9091:9090"
@@ -62,15 +68,18 @@ services:
       NOVA_RPC_ADDR: "0.0.0.0:8080"
       NOVA_METRICS_ADDR: "0.0.0.0:9100"
       NOVA_VALIDATORS: "nova-node-1:9090,nova-node-2:9090,nova-node-3:9090,nova-node-4:9090"
-      NOVA_GENESIS_PATH: "/data/genesis.json"
       NOVA_BOOT_NODES: "nova-node-1:9090"
       NOVA_LOG_LEVEL: "debug"
       RUST_LOG: "debug"
+    depends_on:
+      nova-node-1:
+        condition: service_healthy
 
   nova-node-3:
     <<: *node-defaults
     container_name: nova-node-3
     hostname: nova-node-3
+    command: ["run", "--dev", "--validator", "--data-dir", "/data"]
     ports:
       - "8082:8080"
       - "9092:9090"
@@ -83,15 +92,18 @@ services:
       NOVA_RPC_ADDR: "0.0.0.0:8080"
       NOVA_METRICS_ADDR: "0.0.0.0:9100"
       NOVA_VALIDATORS: "nova-node-1:9090,nova-node-2:9090,nova-node-3:9090,nova-node-4:9090"
-      NOVA_GENESIS_PATH: "/data/genesis.json"
       NOVA_BOOT_NODES: "nova-node-1:9090"
       NOVA_LOG_LEVEL: "debug"
       RUST_LOG: "debug"
+    depends_on:
+      nova-node-1:
+        condition: service_healthy
 
   nova-node-4:
     <<: *node-defaults
     container_name: nova-node-4
     hostname: nova-node-4
+    command: ["run", "--dev", "--validator", "--data-dir", "/data"]
     ports:
       - "8083:8080"
       - "9093:9090"
@@ -104,13 +116,18 @@ services:
       NOVA_RPC_ADDR: "0.0.0.0:8080"
       NOVA_METRICS_ADDR: "0.0.0.0:9100"
       NOVA_VALIDATORS: "nova-node-1:9090,nova-node-2:9090,nova-node-3:9090,nova-node-4:9090"
-      NOVA_GENESIS_PATH: "/data/genesis.json"
       NOVA_BOOT_NODES: "nova-node-1:9090"
       NOVA_LOG_LEVEL: "debug"
       RUST_LOG: "debug"
+    depends_on:
+      nova-node-1:
+        condition: service_healthy
 
   # --------------------------------------------------------------------------
   # API Gateway
+  #
+  # Stateless proxy that fans out to the validator nodes. Does not participate
+  # in consensus — it just forwards RPC requests and aggregates results.
   # --------------------------------------------------------------------------
   nova-api:
     build:
@@ -119,13 +136,13 @@ services:
     container_name: nova-api
     hostname: nova-api
     restart: unless-stopped
+    command: ["run", "--dev", "--data-dir", "/data"]
     ports:
       - "8090:8080"   # Public API
       - "9110:9100"   # Metrics
     volumes:
       - nova-api-data:/data
     environment:
-      NOVA_MODE: "api"
       NOVA_RPC_ADDR: "0.0.0.0:8080"
       NOVA_METRICS_ADDR: "0.0.0.0:9100"
       NOVA_UPSTREAM_NODES: "nova-node-1:8080,nova-node-2:8080,nova-node-3:8080,nova-node-4:8080"
@@ -137,8 +154,8 @@ services:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
       interval: 15s
       timeout: 5s
-      start_period: 20s
-      retries: 3
+      start_period: 30s
+      retries: 5
     depends_on:
       nova-node-1:
         condition: service_healthy
@@ -158,9 +175,11 @@ services:
       - "3000:3000"
     volumes:
       - ../apps/explorer:/app
+      - explorer-node-modules:/app/node_modules
     environment:
       NODE_ENV: "development"
       PORT: "3000"
+      VITE_NOVA_API_URL: "http://localhost:8090"
       NOVA_API_URL: "http://nova-api:8080"
     command: ["sh", "-c", "npm install --prefer-offline && npm run dev -- --host 0.0.0.0 --port 3000"]
     networks:
@@ -169,7 +188,39 @@ services:
       test: ["CMD", "curl", "-sf", "http://localhost:3000/"]
       interval: 15s
       timeout: 5s
-      start_period: 45s
+      start_period: 60s
+      retries: 5
+    depends_on:
+      nova-api:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # Wallet Web App
+  # --------------------------------------------------------------------------
+  nova-wallet:
+    image: node:20-slim
+    container_name: nova-wallet
+    hostname: nova-wallet
+    restart: unless-stopped
+    working_dir: /app
+    ports:
+      - "3001:3001"
+    volumes:
+      - ../apps/wallet-web:/app
+      - wallet-node-modules:/app/node_modules
+    environment:
+      NODE_ENV: "development"
+      PORT: "3001"
+      VITE_NOVA_API_URL: "http://localhost:8090"
+      NOVA_API_URL: "http://nova-api:8080"
+    command: ["sh", "-c", "npm install --prefer-offline && npm run dev -- --host 0.0.0.0 --port 3001"]
+    networks:
+      - nova-network
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3001/"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
       retries: 5
     depends_on:
       nova-api:
@@ -194,3 +245,5 @@ volumes:
   nova-node-3-data:
   nova-node-4-data:
   nova-api-data:
+  explorer-node-modules:
+  wallet-node-modules:

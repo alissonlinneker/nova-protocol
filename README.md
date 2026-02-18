@@ -17,6 +17,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://github.com/alissonlinneker/nova-protocol/actions"><img src="https://img.shields.io/github/actions/workflow/status/alissonlinneker/nova-protocol/ci.yml?branch=main&label=CI&logo=github" alt="CI Status"></a>
   <a href="https://codecov.io/gh/alissonlinneker/nova-protocol"><img src="https://img.shields.io/codecov/c/github/alissonlinneker/nova-protocol?logo=codecov" alt="Coverage"></a>
+  <img src="https://img.shields.io/badge/tests-525_passed-brightgreen?logo=checkmarx&logoColor=white" alt="525 Tests">
 </p>
 
 <br />
@@ -275,6 +276,24 @@ curl -X POST http://localhost:8090/rpc \
     }],
     "id": 1
   }'
+```
+
+---
+
+## Quick Demo
+
+See the full protocol lifecycle in action -- identity creation, transfers, ZKP confidential payments, and block production -- all in one command:
+
+```bash
+make demo
+```
+
+For a visual devnet with Block Explorer and Web Wallet:
+
+```bash
+make docker-demo
+# Explorer: http://localhost:3000
+# Wallet:   http://localhost:3001
 ```
 
 ---
@@ -932,6 +951,47 @@ make bench-consensus   # Block production and finalization
 ./scripts/benchmark.sh
 ```
 
+### Benchmark Results
+
+Measured on Apple M2 Max (arm64), Rust 1.93.1 release profile, Criterion 0.5.1 (100 samples).
+
+| Category | Operation | Median | Throughput |
+|----------|-----------|--------|------------|
+| **Signing** | Keypair generation | 11.99 us | ~83,400 ops/s |
+| **Signing** | Sign message | 11.64 us | ~85,900 ops/s |
+| **Signing** | Verify signature | 31.20 us | ~32,050 ops/s |
+| **Signing** | Sign transaction | 13.61 us | ~73,470 ops/s |
+| **Signing** | Batch verify (500 sigs) | 15.80 ms | ~31,640 elem/s |
+| **ZKP** | Groth16 trusted setup | 5.52 ms | one-time |
+| **ZKP** | Pedersen commitment | 62.15 us | — |
+| **ZKP** | Groth16 prove | 3.81 ms | ~262 proofs/s |
+| **ZKP** | Groth16 verify | 2.05 ms | ~487 verifications/s |
+| **Consensus** | Vote create (sign) | 11.69 us | ~85,550 ops/s |
+| **Consensus** | Vote verify | 31.90 us | ~31,350 ops/s |
+| **Consensus** | Block propose (7 validators) | 14.67 us | ~68,160 ops/s |
+| **Consensus** | Finalize (21 validators, quorum 15) | 490.79 us | — |
+
+Run `make bench` to reproduce. See [`docs/benchmarks/BENCHMARKS.md`](docs/benchmarks/BENCHMARKS.md) for the full report with batch verification scaling data and detailed analysis.
+
+---
+
+## Test Coverage
+
+The test suite comprises **525 tests** (505 unit + 20 end-to-end) across the Rust workspace, TypeScript SDK, and Python SDK, achieving **87.76% line coverage**.
+
+```bash
+# Run the full test suite with coverage
+make coverage
+```
+
+| Metric | Covered | Total | Percentage |
+|--------|---------|-------|------------|
+| Lines | 10,492 | 11,956 | **87.76%** |
+| Functions | 1,170 | 1,379 | 84.84% |
+| Regions | 19,311 | 21,448 | 90.04% |
+
+Coverage is measured with `cargo-llvm-cov` and reported to [Codecov](https://codecov.io/gh/alissonlinneker/nova-protocol).
+
 ---
 
 ## Security
@@ -1501,6 +1561,12 @@ make explorer-dev             # Start block explorer dev server
 # Cleanup
 make clean                    # Remove all build artifacts
 ```
+
+---
+
+## Documentation
+
+Comprehensive documentation is available on the [GitHub Wiki](https://github.com/alissonlinneker/nova-protocol/wiki), covering architecture, cryptography, identity, transactions, ZKP, consensus, networking, SDKs, and more.
 
 ---
 

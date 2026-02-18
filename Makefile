@@ -1,4 +1,4 @@
-.PHONY: all build test lint clean dev-setup devnet docs bench fmt check
+.PHONY: all build test lint clean dev-setup devnet docs bench bench-report fmt check demo docker-demo docker-clean coverage coverage-html coverage-lcov
 
 # Default target
 all: build test
@@ -12,6 +12,9 @@ build:
 
 release:
 	cargo build --workspace --release
+
+demo:
+	cargo run --example demo -p nova-protocol --release
 
 # ============================================================================
 # Testing
@@ -57,6 +60,20 @@ check:
 	cargo check --workspace
 
 # ============================================================================
+# Coverage
+# ============================================================================
+
+coverage:
+	cargo llvm-cov --workspace --ignore-filename-regex='benches|examples'
+
+coverage-html:
+	cargo llvm-cov --workspace --ignore-filename-regex='benches|examples' --html
+	@echo "Coverage report generated at target/llvm-cov/html/index.html"
+
+coverage-lcov:
+	cargo llvm-cov --workspace --ignore-filename-regex='benches|examples' --lcov --output-path target/llvm-cov/lcov.info
+
+# ============================================================================
 # Benchmarks
 # ============================================================================
 
@@ -71,6 +88,12 @@ bench-zkp:
 
 bench-consensus:
 	cargo bench -p nova-protocol --bench consensus_bench
+
+bench-report:
+	@./scripts/bench-report.sh
+
+bench-report-save:
+	@./scripts/bench-report.sh --save
 
 # ============================================================================
 # Development environment
@@ -113,6 +136,15 @@ docker-down:
 
 docker-logs:
 	docker compose -f docker/docker-compose.yml logs -f
+
+docker-clean:
+	docker compose -f docker/docker-compose.yml down -v --remove-orphans
+
+docker-demo: docker-build docker-up
+	@echo "Waiting for devnet to start..."
+	@sleep 5
+	@./scripts/seed-demo.sh
+	@echo "Devnet running! Explorer: http://localhost:3000 | Wallet: http://localhost:3001"
 
 # ============================================================================
 # Web applications

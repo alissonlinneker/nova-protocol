@@ -86,4 +86,4 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -sf http://localhost:8080/health || exit 1
 
 ENTRYPOINT ["/app/nova-node"]
-CMD ["--data-dir", "/data"]
+CMD ["run", "--data-dir", "/data"]
