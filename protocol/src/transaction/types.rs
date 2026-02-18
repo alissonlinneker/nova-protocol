@@ -28,6 +28,9 @@ pub enum TransactionType {
     TokenMint,
     /// Permanently destroy tokens, removing them from circulation.
     TokenBurn,
+    /// Privacy-preserving value transfer using a Groth16 zero-knowledge proof.
+    /// Requires both a ZKP proof and a Pedersen commitment on the transaction.
+    ConfidentialTransfer,
 }
 
 impl fmt::Display for TransactionType {
@@ -38,6 +41,7 @@ impl fmt::Display for TransactionType {
             Self::CreditSettlement => write!(f, "CreditSettlement"),
             Self::TokenMint => write!(f, "TokenMint"),
             Self::TokenBurn => write!(f, "TokenBurn"),
+            Self::ConfidentialTransfer => write!(f, "ConfidentialTransfer"),
         }
     }
 }
@@ -209,6 +213,10 @@ mod tests {
     fn transaction_type_display() {
         assert_eq!(TransactionType::Transfer.to_string(), "Transfer");
         assert_eq!(TransactionType::TokenBurn.to_string(), "TokenBurn");
+        assert_eq!(
+            TransactionType::ConfidentialTransfer.to_string(),
+            "ConfidentialTransfer"
+        );
     }
 
     #[test]
@@ -275,6 +283,7 @@ mod tests {
             TransactionType::CreditSettlement,
             TransactionType::TokenMint,
             TransactionType::TokenBurn,
+            TransactionType::ConfidentialTransfer,
         ];
         for t in types {
             let json = serde_json::to_string(&t).unwrap();

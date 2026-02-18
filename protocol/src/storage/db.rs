@@ -130,6 +130,15 @@ impl NovaDB {
         })
     }
 
+    /// Open a named sled tree from the underlying database.
+    ///
+    /// Used by higher-level data structures (e.g., Sparse Merkle Tree) that
+    /// need dedicated key-value storage within the same database instance.
+    /// The tree is created if it doesn't exist.
+    pub fn open_tree(&self, name: &str) -> DbResult<Tree> {
+        Ok(self.db.open_tree(name)?)
+    }
+
     // -- Block operations ---------------------------------------------------
 
     /// Persist a block and all its transactions atomically.

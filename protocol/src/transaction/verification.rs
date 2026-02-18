@@ -9,8 +9,10 @@ use chrono::Utc;
 use thiserror::Error;
 
 use super::builder::Transaction;
+use super::types::TransactionType;
 use crate::crypto::keys::{NovaPublicKey, NovaSignature};
 use crate::identity::nova_id::NovaId;
+use crate::zkp::prover::BalanceProof;
 
 // ---------------------------------------------------------------------------
 // Error types
@@ -61,6 +63,18 @@ pub enum TransactionError {
         delta_secs: i64,
         max_secs: i64,
     },
+
+    /// A `ConfidentialTransfer` is missing its required ZKP proof.
+    #[error("confidential transfer requires a Groth16 proof")]
+    MissingProof,
+
+    /// A `ConfidentialTransfer` is missing its required Pedersen commitment.
+    #[error("confidential transfer requires an amount commitment")]
+    MissingCommitment,
+
+    /// The attached ZKP proof could not be deserialized.
+    #[error("invalid ZKP proof: {reason}")]
+    InvalidProof { reason: String },
 }
 
 // ---------------------------------------------------------------------------
@@ -85,6 +99,8 @@ const MAX_FUTURE_SECONDS: i64 = 300;
 /// 6. **Signature present** — the transaction must be signed.
 /// 7. **Sender address valid** — must parse as a `nova:<hex>` address.
 /// 8. **Signature valid** — Ed25519 verification against the sender's public key.
+/// 9. **ConfidentialTransfer fields** — proof and commitment required.
+/// 10. **ZKP structural validity** — if proof attached, must deserialize.
 ///
 /// # Errors
 ///
@@ -186,6 +202,27 @@ pub fn verify_transaction(tx: &Transaction) -> Result<(), TransactionError> {
         return Err(TransactionError::InvalidSignature {
             sender: tx.sender.clone(),
         });
+    }
+
+    // 10. ConfidentialTransfer type REQUIRES both a proof and commitment.
+    if tx.tx_type == TransactionType::ConfidentialTransfer {
+        if tx.proof.is_none() {
+            return Err(TransactionError::MissingProof);
+        }
+        if tx.amount_commitment.is_none() {
+            return Err(TransactionError::MissingCommitment);
+        }
+    }
+
+    // 11. ZKP proof verification — if a proof is attached, validate that
+    //     it is at least well-formed (deserializable as a Groth16 proof).
+    //     Full semantic verification (against a specific commitment and
+    //     required amount) requires the BalanceVerifier, which lives at the
+    //     node layer. Here we perform structural validation only.
+    if let Some(ref proof_bytes) = tx.proof {
+        BalanceProof::from_bytes(proof_bytes).map_err(|e| TransactionError::InvalidProof {
+            reason: e.to_string(),
+        })?;
     }
 
     Ok(())

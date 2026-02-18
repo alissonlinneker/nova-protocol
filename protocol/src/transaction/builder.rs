@@ -80,6 +80,15 @@ pub struct Transaction {
     /// Optional zero-knowledge proof bytes (e.g., a Groth16 balance proof).
     /// Attached for shielded transactions; `None` for transparent ones.
     pub zkp_proof: Option<Vec<u8>>,
+
+    /// Serialized Groth16 proof for confidential transfers. Validators
+    /// deserialize and verify this using the balance-proof verifier.
+    pub proof: Option<Vec<u8>>,
+
+    /// Serialized Pedersen commitment binding the hidden transfer amount.
+    /// Required when `proof` is present; together they enable amount-hiding
+    /// transfers that are still publicly verifiable.
+    pub amount_commitment: Option<Vec<u8>>,
 }
 
 impl Transaction {
@@ -138,10 +147,30 @@ impl Transaction {
 
     /// Computes the transaction ID from the current field values.
     ///
-    /// `id = hex(double_sha256(signable_bytes))`. Deterministic and
-    /// independent of signature/ZKP state.
+    /// The ID covers the signable bytes plus any attached proof and
+    /// commitment. This means the ID changes when a proof is attached
+    /// (which happens after signing), tying the proof to the transaction
+    /// in a tamper-evident way.
+    ///
+    /// `id = hex(double_sha256(signable_bytes || proof || commitment))`.
     pub fn compute_id(&self) -> String {
-        let hash = double_sha256(&self.signable_bytes());
+        let mut buf = self.signable_bytes();
+
+        // Include proof and commitment in the ID so that attaching or
+        // modifying them invalidates the hash. These are appended after
+        // signing, so they are NOT part of signable_bytes().
+        if let Some(ref proof) = self.proof {
+            buf.push(0x02); // proof-present tag
+            buf.extend_from_slice(&(proof.len() as u32).to_le_bytes());
+            buf.extend_from_slice(proof);
+        }
+        if let Some(ref commitment) = self.amount_commitment {
+            buf.push(0x03); // commitment-present tag
+            buf.extend_from_slice(&(commitment.len() as u32).to_le_bytes());
+            buf.extend_from_slice(commitment);
+        }
+
+        let hash = double_sha256(&buf);
         hex::encode(hash)
     }
 
@@ -175,6 +204,34 @@ impl Transaction {
     /// Returns the transaction ID as a hex string (convenience alias).
     pub fn id_hex(&self) -> String {
         self.id.clone()
+    }
+
+    /// Attach a serialized Groth16 proof and recompute the transaction ID.
+    ///
+    /// This is called after signing because the proof is not part of the
+    /// signed payload (it is generated from the same witness the signer
+    /// already proved knowledge of via Ed25519).
+    pub fn with_proof(mut self, proof: Vec<u8>) -> Self {
+        self.proof = Some(proof);
+        self.id = self.compute_id();
+        self
+    }
+
+    /// Attach a serialized Pedersen commitment and recompute the transaction ID.
+    pub fn with_commitment(mut self, commitment: Vec<u8>) -> Self {
+        self.amount_commitment = Some(commitment);
+        self.id = self.compute_id();
+        self
+    }
+
+    /// Returns `true` if the transaction carries a Groth16 proof.
+    pub fn has_proof(&self) -> bool {
+        self.proof.is_some()
+    }
+
+    /// Returns `true` if the transaction carries an amount commitment.
+    pub fn has_commitment(&self) -> bool {
+        self.amount_commitment.is_some()
     }
 }
 
@@ -308,6 +365,8 @@ impl TransactionBuilder {
             sender_public_key: None,
             signature: None,
             zkp_proof: None,
+            proof: None,
+            amount_commitment: None,
         };
 
         tx.id = tx.compute_id();

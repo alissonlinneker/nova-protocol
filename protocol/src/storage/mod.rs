@@ -8,7 +8,7 @@
 //!
 //! ```text
 //! block.rs  — Block structure, genesis block, hash/verify operations
-//! state.rs  — Simplified Merkle Patricia Trie for account state
+//! state.rs  — Sparse Merkle Tree for account state (256-bit keyspace, BLAKE3)
 //! chain.rs  — In-memory chain management with validation
 //! db.rs     — sled-backed persistence with separate trees per data type
 //! ```
@@ -47,4 +47,4 @@ pub mod state;
 pub use block::{Block, BlockHeader};
 pub use chain::Chain;
 pub use db::{DbError, DbResult, NovaDB};
-pub use state::{AccountState, StateTree};
+pub use state::{apply_transfer, AccountState, MerkleProof, StateError, StateTree};

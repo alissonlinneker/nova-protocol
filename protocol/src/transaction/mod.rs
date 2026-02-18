@@ -35,12 +35,14 @@
 //!   clock-skew attacks without rejecting legitimate transactions.
 
 pub mod builder;
+pub mod confidential;
 pub mod receipt;
 pub mod signing;
 pub mod types;
 pub mod verification;
 
 pub use builder::{Transaction, TransactionBuilder};
+pub use confidential::{create_confidential_transfer, verify_confidential_proof};
 pub use receipt::TransactionReceipt;
 pub use signing::sign_transaction;
 pub use types::{Amount, Currency, TransactionStatus, TransactionType};
