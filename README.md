@@ -15,8 +15,8 @@
 <p align="center">
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.75%2B-orange?logo=rust&logoColor=white" alt="Rust 1.75+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
-  <a href="https://github.com/nova-protocol/nova-protocol/actions"><img src="https://img.shields.io/github/actions/workflow/status/nova-protocol/nova-protocol/ci.yml?branch=main&label=CI&logo=github" alt="CI Status"></a>
-  <a href="https://codecov.io/gh/nova-protocol/nova-protocol"><img src="https://img.shields.io/codecov/c/github/nova-protocol/nova-protocol?logo=codecov" alt="Coverage"></a>
+  <a href="https://github.com/alissonlinneker/nova-protocol/actions"><img src="https://img.shields.io/github/actions/workflow/status/alissonlinneker/nova-protocol/ci.yml?branch=main&label=CI&logo=github" alt="CI Status"></a>
+  <a href="https://codecov.io/gh/alissonlinneker/nova-protocol"><img src="https://img.shields.io/codecov/c/github/alissonlinneker/nova-protocol?logo=codecov" alt="Coverage"></a>
   <a href="https://docs.novaprotocol.io"><img src="https://img.shields.io/badge/docs-novaprotocol.io-green?logo=readthedocs" alt="Docs"></a>
   <a href="https://discord.gg/novaprotocol"><img src="https://img.shields.io/discord/1234567890?logo=discord&label=Discord&color=5865F2" alt="Discord"></a>
 </p>
@@ -217,7 +217,7 @@ sequenceDiagram
 
 ```bash
 # Clone the repository
-git clone https://github.com/nova-protocol/nova-protocol.git
+git clone https://github.com/alissonlinneker/nova-protocol.git
 cd nova-protocol
 
 # Install development tools and dependencies
@@ -1512,8 +1512,8 @@ Please read [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the full contribution
 
 ### Where to Start
 
-- Look for issues labeled [`good first issue`](https://github.com/nova-protocol/nova-protocol/issues?q=label%3A%22good+first+issue%22) -- these are scoped, well-described, and ready for someone to pick up.
-- The [`help wanted`](https://github.com/nova-protocol/nova-protocol/issues?q=label%3A%22help+wanted%22) label marks issues where we would particularly value community input.
+- Look for issues labeled [`good first issue`](https://github.com/alissonlinneker/nova-protocol/issues?q=label%3A%22good+first+issue%22) -- these are scoped, well-described, and ready for someone to pick up.
+- The [`help wanted`](https://github.com/alissonlinneker/nova-protocol/issues?q=label%3A%22help+wanted%22) label marks issues where we would particularly value community input.
 - If you are interested in the cryptographic modules, please have experience with elliptic curve cryptography and zero-knowledge proof systems. We will not merge speculative optimizations to security-critical code.
 
 ### Code of Conduct

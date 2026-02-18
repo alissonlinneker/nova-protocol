@@ -36,11 +36,11 @@
   "author": "Alisson Linneker <alisson@alastechnology.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nova-protocol/nova-protocol.git",
+    "url": "https://github.com/alissonlinneker/nova-protocol.git",
     "directory": "sdk/typescript"
   },
-  "homepage": "https://github.com/nova-protocol/nova-protocol#typescript-sdk",
-  "bugs": "https://github.com/nova-protocol/nova-protocol/issues",
+  "homepage": "https://github.com/alissonlinneker/nova-protocol#typescript-sdk",
+  "bugs": "https://github.com/alissonlinneker/nova-protocol/issues",
   "keywords": ["nova", "protocol", "payments", "crypto", "ed25519", "typescript"],
   "license": "MIT"
 }

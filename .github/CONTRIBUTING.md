@@ -29,7 +29,7 @@ Thank you for your interest in contributing to NOVA Protocol. This guide covers 
 
 ```bash
 # Clone the repository
-git clone https://github.com/nova-protocol/nova-protocol.git
+git clone https://github.com/alissonlinneker/nova-protocol.git
 cd nova-protocol
 
 # Install all dependencies
@@ -218,8 +218,8 @@ Releases follow [Semantic Versioning](https://semver.org/):
 
 ## Getting Help
 
-- **Discussions**: [GitHub Discussions](https://github.com/nova-protocol/nova-protocol/discussions) for questions and ideas.
-- **Issues**: [GitHub Issues](https://github.com/nova-protocol/nova-protocol/issues) for bugs and feature requests.
+- **Discussions**: [GitHub Discussions](https://github.com/alissonlinneker/nova-protocol/discussions) for questions and ideas.
+- **Issues**: [GitHub Issues](https://github.com/alissonlinneker/nova-protocol/issues) for bugs and feature requests.
 - **Security**: See [SECURITY.md](../SECURITY.md) for vulnerability reporting.
 
 We appreciate every contribution, whether it is code, documentation, bug reports, or feedback. Thank you for helping build NOVA Protocol.
