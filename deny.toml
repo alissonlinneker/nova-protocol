@@ -2,13 +2,16 @@
 all-features = true
 
 [advisories]
-vulnerability = "deny"
-unmaintained = "warn"
-yanked = "warn"
-notice = "warn"
+version = 2
+ignore = [
+    # Transitive dependencies via libp2p/arkworks — track upstream fixes.
+    "RUSTSEC-2024-0437", # protobuf uncontrolled recursion
+    "RUSTSEC-2025-0009", # aes overflow check panic
+    "RUSTSEC-2025-0055", # tracing ANSI escape sequences
+]
 
 [licenses]
-unlicensed = "deny"
+version = 2
 allow = [
     "MIT",
     "Apache-2.0",
