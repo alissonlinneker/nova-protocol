@@ -41,7 +41,7 @@ pub use consensus::{
     Vote,
 };
 pub use gossip::{GossipAction, GossipConfig, GossipMessage, GossipProtocol, PeerInfo};
-pub use mempool::Mempool;
+pub use mempool::{Mempool, MempoolConfig, MempoolEntry, MempoolError};
 pub use node::{NodeStatus, ValidatorNode};
 pub use rpc::{RpcError, RpcMethod, RpcRequest, RpcResponse};
 pub use sync::{SyncProtocol, SyncRequest, SyncResponse};

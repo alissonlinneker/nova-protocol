@@ -26,7 +26,7 @@ use tracing::{info, warn};
 use crate::config;
 use crate::crypto::keys::NovaKeypair;
 use crate::network::consensus::{ConsensusConfig, ConsensusEngine, ValidatorSet};
-use crate::network::mempool::Mempool;
+use crate::network::mempool::{Mempool, MempoolConfig};
 use crate::storage::{Block, Chain};
 use crate::transaction::Transaction;
 
@@ -103,7 +103,10 @@ impl ValidatorNode {
             status: NodeStatus::Offline,
             peers: Arc::new(RwLock::new(HashSet::new())),
             chain: Arc::new(RwLock::new(Chain::default())),
-            mempool: Arc::new(Mempool::new(config.max_block_transactions * 10)),
+            mempool: Arc::new(Mempool::new(MempoolConfig {
+                max_size: config.max_block_transactions * 10,
+                ..MempoolConfig::default()
+            })),
             consensus: None,
         }
     }
@@ -161,8 +164,10 @@ impl ValidatorNode {
 
         // Insert into mempool.
         self.mempool
-            .insert(tx)
-            .map_err(|e| NodeError::MempoolFull(e.to_string()))?;
+            .add(tx)
+            .map_err(|e: crate::network::mempool::MempoolError| {
+                NodeError::MempoolFull(e.to_string())
+            })?;
 
         Ok(())
     }

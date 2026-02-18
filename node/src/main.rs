@@ -22,7 +22,10 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use std::sync::Arc;
 use tokio::signal;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, RwLock};
+
+use nova_protocol::storage::db::NovaDB;
+use nova_protocol::storage::state::StateTree;
 
 use cli::{Commands, NovaNodeCli};
 use logging::LogFormat;
@@ -64,11 +67,31 @@ async fn run_node(args: cli::RunArgs) -> Result<()> {
         "starting nova-node"
     );
 
+    // --- Persistent storage ---
+    let db_path = args.data_dir.join("db");
+    std::fs::create_dir_all(&db_path)
+        .with_context(|| format!("failed to create database directory: {}", db_path.display()))?;
+
+    let db = Arc::new(
+        NovaDB::open(&db_path)
+            .with_context(|| format!("failed to open database at {}", db_path.display()))?,
+    );
+    tracing::info!(path = %db_path.display(), "database opened");
+
+    // --- State tree ---
+    let state_tree = Arc::new(RwLock::new(StateTree::new((*db).clone())));
+
     // --- Metrics ---
     let node_metrics = Arc::new(NodeMetrics::new());
 
     // --- Event broadcast ---
     let (event_tx, _) = broadcast::channel(EVENT_CHANNEL_CAPACITY);
+
+    // --- Block height ---
+    let block_height = Arc::new(std::sync::atomic::AtomicU64::new(0));
+
+    // --- Genesis initialization ---
+    api::initialize_genesis(&db, &block_height);
 
     // --- Application state ---
     let app_state = api::AppState {
@@ -78,10 +101,12 @@ async fn run_node(args: cli::RunArgs) -> Result<()> {
             nova_protocol::config::PROTOCOL_VERSION,
         ),
         network: "devnet".to_string(),
-        block_height: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        block_height: Arc::clone(&block_height),
         peer_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         event_tx: event_tx.clone(),
         metrics: Arc::clone(&node_metrics),
+        db: Arc::clone(&db),
+        state_tree,
     };
 
     // --- API server ---
