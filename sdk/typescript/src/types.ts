@@ -54,6 +54,8 @@ export interface Amount {
 export interface Transaction {
   /** Unique hash computed from the transaction body. */
   id: string;
+  /** Protocol version (default: 1). Allows validators to apply the correct rule set. */
+  version: number;
   type: TransactionType;
   sender: NovaId;
   receiver: NovaId;

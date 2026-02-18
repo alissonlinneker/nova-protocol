@@ -1,5 +1,10 @@
 /**
  * NOVA Protocol — Transaction Building, Signing & Verification
+ *
+ * Wire format is aligned with the Rust protocol crate so that transactions
+ * built in any SDK can be verified by the Rust validator node. The canonical
+ * binary serialization (signable bytes) uses little-endian integers and null-
+ * byte separators — see {@link signableBytes} for the exact layout.
  */
 
 import { sha256 } from '@noble/hashes/sha256';
@@ -17,51 +22,104 @@ import type {
 import { bytesToHex, generateNonce } from './utils.js';
 
 // ---------------------------------------------------------------------------
-// Transaction ID computation
+// Transaction type mapping
 // ---------------------------------------------------------------------------
 
 /**
- * Deterministically compute a transaction ID by SHA-256 hashing the
- * canonical byte representation of the transaction body.
- *
- * The canonical form is:
- *   type | sender | receiver | amount.value (BE u64) | amount.currency |
- *   fee (BE u64) | nonce (BE u32) | timestamp (BE u64) | payload
+ * Map SDK transaction type strings to the Rust `TransactionType::Display`
+ * format used in the canonical byte serialization. The Rust side uses
+ * PascalCase (e.g. "Transfer"), while the SDK uses snake_case for JSON
+ * ergonomics.
  */
-export function computeTransactionId(tx: Omit<Transaction, 'id'>): string {
+const TX_TYPE_WIRE: Record<TransactionType, string> = {
+  transfer: 'Transfer',
+  credit_request: 'CreditRequest',
+  credit_settlement: 'CreditSettlement',
+  token_mint: 'TokenMint',
+  token_burn: 'TokenBurn',
+};
+
+// ---------------------------------------------------------------------------
+// Canonical signable bytes — matches Rust Transaction::signable_bytes()
+// ---------------------------------------------------------------------------
+
+/**
+ * Produce the canonical byte representation used for signing and transaction
+ * ID computation. This must match `Transaction::signable_bytes()` in the Rust
+ * protocol crate byte-for-byte.
+ *
+ * Layout:
+ *   version        — 2 bytes, little-endian u16
+ *   tx_type        — UTF-8 PascalCase string + 0x00 separator
+ *   sender         — UTF-8 address string + 0x00 separator
+ *   receiver       — UTF-8 address string + 0x00 separator
+ *   amount.value   — 8 bytes, little-endian u64
+ *   amount.currency— UTF-8 string + 0x00 separator
+ *   fee            — 8 bytes, little-endian u64
+ *   nonce          — 8 bytes, little-endian u64
+ *   timestamp      — 8 bytes, little-endian u64
+ *   payload        — if present: 0x01 + 4-byte LE u32 length + raw bytes
+ *                    if absent:  0x00
+ *
+ * Fields excluded: id, signature, sender_public_key, zkp_proof.
+ */
+export function signableBytes(tx: Omit<Transaction, 'id'>): Uint8Array {
   const encoder = new TextEncoder();
+  const parts: Uint8Array[] = [];
 
-  const typeBytes = encoder.encode(tx.type);
-  const senderBytes = encoder.encode(tx.sender);
-  const receiverBytes = encoder.encode(tx.receiver);
-  const currencyBytes = encoder.encode(tx.amount.currency);
+  // Protocol version (2 bytes, LE).
+  const versionBuf = new Uint8Array(2);
+  new DataView(versionBuf.buffer).setUint16(0, tx.version, true);
+  parts.push(versionBuf);
 
-  // Encode numeric fields as big-endian fixed-width buffers.
-  const amountBuf = new ArrayBuffer(8);
-  new DataView(amountBuf).setBigUint64(0, BigInt(tx.amount.value));
+  // Transaction type discriminant (PascalCase) + null separator.
+  parts.push(encoder.encode(TX_TYPE_WIRE[tx.type]));
+  parts.push(new Uint8Array([0x00]));
 
-  const feeBuf = new ArrayBuffer(8);
-  new DataView(feeBuf).setBigUint64(0, BigInt(tx.fee));
+  // Sender address + null separator.
+  parts.push(encoder.encode(tx.sender));
+  parts.push(new Uint8Array([0x00]));
 
-  const nonceBuf = new ArrayBuffer(4);
-  new DataView(nonceBuf).setUint32(0, tx.nonce);
+  // Receiver address + null separator.
+  parts.push(encoder.encode(tx.receiver));
+  parts.push(new Uint8Array([0x00]));
 
-  const timestampBuf = new ArrayBuffer(8);
-  new DataView(timestampBuf).setBigUint64(0, BigInt(tx.timestamp));
+  // Amount value (8 bytes, LE u64).
+  const amountBuf = new Uint8Array(8);
+  new DataView(amountBuf.buffer).setBigUint64(0, BigInt(tx.amount.value), true);
+  parts.push(amountBuf);
 
-  // Concatenate all segments.
-  const parts: Uint8Array[] = [
-    typeBytes,
-    senderBytes,
-    receiverBytes,
-    new Uint8Array(amountBuf),
-    currencyBytes,
-    new Uint8Array(feeBuf),
-    new Uint8Array(nonceBuf),
-    new Uint8Array(timestampBuf),
-    tx.payload,
-  ];
+  // Amount currency string + null separator.
+  parts.push(encoder.encode(tx.amount.currency));
+  parts.push(new Uint8Array([0x00]));
 
+  // Fee (8 bytes, LE u64).
+  const feeBuf = new Uint8Array(8);
+  new DataView(feeBuf.buffer).setBigUint64(0, BigInt(tx.fee), true);
+  parts.push(feeBuf);
+
+  // Nonce (8 bytes, LE u64).
+  const nonceBuf = new Uint8Array(8);
+  new DataView(nonceBuf.buffer).setBigUint64(0, BigInt(tx.nonce), true);
+  parts.push(nonceBuf);
+
+  // Timestamp (8 bytes, LE u64).
+  const timestampBuf = new Uint8Array(8);
+  new DataView(timestampBuf.buffer).setBigUint64(0, BigInt(tx.timestamp), true);
+  parts.push(timestampBuf);
+
+  // Payload: length-prefixed if present, single 0x00 flag if absent.
+  if (tx.payload.length > 0) {
+    parts.push(new Uint8Array([0x01]));
+    const lenBuf = new Uint8Array(4);
+    new DataView(lenBuf.buffer).setUint32(0, tx.payload.length, true);
+    parts.push(lenBuf);
+    parts.push(tx.payload);
+  } else {
+    parts.push(new Uint8Array([0x00]));
+  }
+
+  // Concatenate all segments into a single buffer.
   const totalLength = parts.reduce((sum, p) => sum + p.length, 0);
   const buf = new Uint8Array(totalLength);
   let offset = 0;
@@ -70,26 +128,23 @@ export function computeTransactionId(tx: Omit<Transaction, 'id'>): string {
     offset += part.length;
   }
 
-  const hash = sha256(buf);
-  return bytesToHex(hash);
+  return buf;
 }
 
 // ---------------------------------------------------------------------------
-// Canonical signing message
+// Transaction ID computation
 // ---------------------------------------------------------------------------
 
 /**
- * Build the message that is actually signed:
- *   SHA-256( "nova-tx:" | txId )
+ * Compute the canonical transaction ID: `hex(double_sha256(signable_bytes))`.
+ *
+ * This matches the Rust `Transaction::compute_id()` implementation, which
+ * applies SHA-256 twice to protect against length-extension attacks.
  */
-function signingMessage(txId: string): Uint8Array {
-  const encoder = new TextEncoder();
-  const prefix = encoder.encode('nova-tx:');
-  const id = encoder.encode(txId);
-  const combined = new Uint8Array(prefix.length + id.length);
-  combined.set(prefix, 0);
-  combined.set(id, prefix.length);
-  return sha256(combined);
+export function computeTransactionId(tx: Omit<Transaction, 'id'>): string {
+  const bytes = signableBytes(tx);
+  const hash = sha256(sha256(bytes));
+  return bytesToHex(hash);
 }
 
 // ---------------------------------------------------------------------------
@@ -97,6 +152,7 @@ function signingMessage(txId: string): Uint8Array {
 // ---------------------------------------------------------------------------
 
 export class TransactionBuilder {
+  private _version: number = 1;
   private _type: TransactionType = 'transfer';
   private _sender: NovaId | undefined;
   private _receiver: NovaId | undefined;
@@ -105,6 +161,12 @@ export class TransactionBuilder {
   private _nonce: number | undefined;
   private _payload: Uint8Array = new Uint8Array(0);
   private _timestamp: number | undefined;
+
+  /** Set the protocol version (default: 1). */
+  version(v: number): this {
+    this._version = v;
+    return this;
+  }
 
   /** Set the transaction type. */
   type(txType: TransactionType): this {
@@ -164,6 +226,7 @@ export class TransactionBuilder {
     if (!this._receiver) throw new Error('TransactionBuilder: receiver is required');
 
     const partial = {
+      version: this._version,
       type: this._type,
       sender: this._sender,
       receiver: this._receiver,
@@ -187,13 +250,17 @@ export class TransactionBuilder {
 /**
  * Sign a transaction with the given secret key and return a
  * {@link SignedTransaction} bundle.
+ *
+ * The signing message is the raw canonical signable bytes (matching the Rust
+ * validator), NOT a hash of the transaction ID.
  */
 export function signTransaction(
   tx: Transaction,
   secretKey: SecretKey,
   signerPublicKey: PublicKey,
 ): SignedTransaction {
-  const msg = signingMessage(tx.id);
+  const { id: _id, ...body } = tx;
+  const msg = signableBytes(body);
   const signature: Signature = signMessage(secretKey, msg);
 
   return {
@@ -208,7 +275,7 @@ export function signTransaction(
  * embedded signer public key, and that the transaction ID is consistent.
  */
 export function verifyTransaction(signedTx: SignedTransaction): boolean {
-  // Re-derive the transaction ID to make sure it was not tampered with.
+  // Re-derive the transaction ID to detect tampering.
   const { id: _original, ...body } = signedTx.transaction;
   const recomputedId = computeTransactionId(body);
 
@@ -216,6 +283,7 @@ export function verifyTransaction(signedTx: SignedTransaction): boolean {
     return false;
   }
 
-  const msg = signingMessage(signedTx.transaction.id);
+  // Verify the Ed25519 signature over the raw signable bytes.
+  const msg = signableBytes(body);
   return verifySignature(signedTx.signerPublicKey, msg, signedTx.signature);
 }

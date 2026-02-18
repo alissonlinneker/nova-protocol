@@ -236,6 +236,7 @@ class Transaction(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
+    version: Annotated[int, Field(ge=1, default=1, description="Protocol version")]
     tx_type: TransactionType = Field(alias="type")
     sender: NovaId
     receiver: NovaId

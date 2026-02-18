@@ -4,12 +4,15 @@ import {
   signTransaction,
   verifyTransaction,
   computeTransactionId,
+  signableBytes,
 } from '../src/transaction.js';
 import {
   generateKeypair,
   createNovaId,
+  keypairFromSeed,
 } from '../src/identity.js';
 import type { NovaId } from '../src/types.js';
+import { bytesToHex } from '../src/utils.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,6 +43,7 @@ describe('TransactionBuilder', () => {
       .build();
 
     expect(tx.type).toBe('transfer');
+    expect(tx.version).toBe(1);
     expect(tx.sender).toBe(sender.address);
     expect(tx.receiver).toBe(receiver.address);
     expect(tx.amount.value).toBe(1_000_000n);
@@ -47,7 +51,7 @@ describe('TransactionBuilder', () => {
     expect(tx.fee).toBe(100n);
     expect(tx.nonce).toBe(1);
     expect(typeof tx.id).toBe('string');
-    expect(tx.id.length).toBe(64); // SHA-256 hex = 64 chars
+    expect(tx.id.length).toBe(64); // double-SHA-256 hex = 64 chars
     expect(tx.timestamp).toBeGreaterThan(0);
   });
 
@@ -62,6 +66,19 @@ describe('TransactionBuilder', () => {
       .build();
 
     expect(tx.amount.currency).toBe('NOVA');
+  });
+
+  it('defaults version to 1', () => {
+    const sender = makePair();
+    const receiver = makePair();
+
+    const tx = new TransactionBuilder()
+      .sender(sender.address)
+      .receiver(receiver.address)
+      .amount(500n)
+      .build();
+
+    expect(tx.version).toBe(1);
   });
 
   it('throws when sender is missing', () => {
@@ -122,6 +139,20 @@ describe('TransactionBuilder', () => {
 
     expect(tx.payload).toEqual(data);
   });
+
+  it('allows overriding the version', () => {
+    const sender = makePair();
+    const receiver = makePair();
+
+    const tx = new TransactionBuilder()
+      .version(2)
+      .sender(sender.address)
+      .receiver(receiver.address)
+      .amount(0n)
+      .build();
+
+    expect(tx.version).toBe(2);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -134,6 +165,7 @@ describe('computeTransactionId', () => {
     const receiver = makePair();
 
     const body = {
+      version: 1,
       type: 'transfer' as const,
       sender: sender.address,
       receiver: receiver.address,
@@ -157,6 +189,7 @@ describe('computeTransactionId', () => {
     const receiver = makePair();
 
     const base = {
+      version: 1,
       type: 'transfer' as const,
       sender: sender.address,
       receiver: receiver.address,
@@ -173,6 +206,127 @@ describe('computeTransactionId', () => {
 
     expect(idBase).not.toBe(idDifferentAmount);
     expect(idBase).not.toBe(idDifferentNonce);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// signableBytes — canonical binary format
+// ---------------------------------------------------------------------------
+
+describe('signableBytes', () => {
+  it('matches the documented Rust layout for a no-payload transaction', () => {
+    const body = {
+      version: 1,
+      type: 'transfer' as const,
+      sender: 'nova1aaaa' as NovaId,
+      receiver: 'nova1bbbb' as NovaId,
+      amount: { value: 1_000_000n, currency: 'NOVA' },
+      fee: 100n,
+      nonce: 1,
+      payload: new Uint8Array(0),
+      timestamp: 1_700_000_000_000,
+    };
+
+    const bytes = signableBytes(body);
+
+    // Verify the structure manually.
+    let offset = 0;
+
+    // version: LE u16 = 1 => [0x01, 0x00]
+    expect(bytes[offset]).toBe(0x01);
+    expect(bytes[offset + 1]).toBe(0x00);
+    offset += 2;
+
+    // tx_type: "Transfer" + 0x00
+    const encoder = new TextEncoder();
+    const typeStr = encoder.encode('Transfer');
+    for (let i = 0; i < typeStr.length; i++) {
+      expect(bytes[offset + i]).toBe(typeStr[i]);
+    }
+    offset += typeStr.length;
+    expect(bytes[offset]).toBe(0x00);
+    offset += 1;
+
+    // sender: "nova1aaaa" + 0x00
+    const senderStr = encoder.encode('nova1aaaa');
+    for (let i = 0; i < senderStr.length; i++) {
+      expect(bytes[offset + i]).toBe(senderStr[i]);
+    }
+    offset += senderStr.length;
+    expect(bytes[offset]).toBe(0x00);
+    offset += 1;
+
+    // receiver: "nova1bbbb" + 0x00
+    const receiverStr = encoder.encode('nova1bbbb');
+    for (let i = 0; i < receiverStr.length; i++) {
+      expect(bytes[offset + i]).toBe(receiverStr[i]);
+    }
+    offset += receiverStr.length;
+    expect(bytes[offset]).toBe(0x00);
+    offset += 1;
+
+    // amount.value: LE u64 = 1_000_000
+    const amountView = new DataView(bytes.buffer, offset, 8);
+    expect(amountView.getBigUint64(0, true)).toBe(1_000_000n);
+    offset += 8;
+
+    // amount.currency: "NOVA" + 0x00
+    const currStr = encoder.encode('NOVA');
+    for (let i = 0; i < currStr.length; i++) {
+      expect(bytes[offset + i]).toBe(currStr[i]);
+    }
+    offset += currStr.length;
+    expect(bytes[offset]).toBe(0x00);
+    offset += 1;
+
+    // fee: LE u64 = 100
+    const feeView = new DataView(bytes.buffer, offset, 8);
+    expect(feeView.getBigUint64(0, true)).toBe(100n);
+    offset += 8;
+
+    // nonce: LE u64 = 1
+    const nonceView = new DataView(bytes.buffer, offset, 8);
+    expect(nonceView.getBigUint64(0, true)).toBe(1n);
+    offset += 8;
+
+    // timestamp: LE u64 = 1_700_000_000_000
+    const tsView = new DataView(bytes.buffer, offset, 8);
+    expect(tsView.getBigUint64(0, true)).toBe(1_700_000_000_000n);
+    offset += 8;
+
+    // no-payload flag: 0x00
+    expect(bytes[offset]).toBe(0x00);
+    offset += 1;
+
+    // Should have consumed the entire buffer.
+    expect(offset).toBe(bytes.length);
+  });
+
+  it('encodes payload with length prefix when present', () => {
+    const payload = new TextEncoder().encode('hello');
+
+    const body = {
+      version: 1,
+      type: 'transfer' as const,
+      sender: 'nova1aaaa' as NovaId,
+      receiver: 'nova1bbbb' as NovaId,
+      amount: { value: 0n, currency: 'NOVA' },
+      fee: 0n,
+      nonce: 1,
+      payload,
+      timestamp: 1_700_000_000_000,
+    };
+
+    const bytes = signableBytes(body);
+
+    // Find the payload section at the end: 0x01 + LE u32 len + payload bytes.
+    const payloadStart = bytes.length - 1 - 4 - payload.length;
+    expect(bytes[payloadStart]).toBe(0x01); // present flag
+    const lenView = new DataView(bytes.buffer, payloadStart + 1, 4);
+    expect(lenView.getUint32(0, true)).toBe(payload.length);
+
+    const extractedPayload = bytes.slice(payloadStart + 5, payloadStart + 5 + payload.length);
+    expect(extractedPayload).toEqual(payload);
   });
 });
 
@@ -246,5 +400,72 @@ describe('signTransaction / verifyTransaction', () => {
     // Replace the signer key with someone else's.
     const bad = { ...signed, signerPublicKey: imposter.publicKey };
     expect(verifyTransaction(bad)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cross-language test vector
+// ---------------------------------------------------------------------------
+
+describe('cross-language test vector', () => {
+  it('produces the same signable bytes and transaction ID as Rust', () => {
+    // Use the same hardcoded address strings as the Rust test to ensure
+    // the binary serialization is identical byte-for-byte.
+    const senderAddr = 'nova1sender_test_vector' as NovaId;
+    const receiverAddr = 'nova1receiver_test_vector' as NovaId;
+
+    const tx = new TransactionBuilder()
+      .version(1)
+      .type('transfer')
+      .sender(senderAddr)
+      .receiver(receiverAddr)
+      .amount(1_000_000n, 'NOVA')
+      .fee(100n)
+      .nonce(42)
+      .timestamp(1_700_000_000_000)
+      .build();
+
+    const { id: _id, ...body } = tx;
+    const canonical = signableBytes(body);
+    const canonicalHex = bytesToHex(canonical);
+
+    // These must match the values pinned in the Rust cross_language_test_vector test.
+    expect(canonicalHex).toBe(
+      '01005472616e73666572006e6f76613173656e6465725f746573745f766563746f72006e6f76613172656365697665725f746573745f766563746f720040420f00000000004e4f56410064000000000000002a000000000000000068e5cf8b01000000'
+    );
+
+    expect(tx.id).toBe(
+      'a8c099ee823f352281802881bf6b55008b4a0f8813808426fe83017e20a5d147'
+    );
+
+    console.log('--- Cross-language test vector (TypeScript) ---');
+    console.log('signable_bytes_hex:', canonicalHex);
+    console.log('tx_id:', tx.id);
+  });
+
+  it('signing round-trips with a deterministic keypair', () => {
+    const seed = new Uint8Array(32);
+    seed[0] = 0x01;
+    const kp = keypairFromSeed(seed);
+    const senderAddr = createNovaId(kp.publicKey);
+
+    const receiverSeed = new Uint8Array(32);
+    receiverSeed[0] = 0x02;
+    const receiverKp = keypairFromSeed(receiverSeed);
+    const receiverAddr = createNovaId(receiverKp.publicKey);
+
+    const tx = new TransactionBuilder()
+      .version(1)
+      .type('transfer')
+      .sender(senderAddr)
+      .receiver(receiverAddr)
+      .amount(1_000_000n, 'NOVA')
+      .fee(100n)
+      .nonce(42)
+      .timestamp(1_700_000_000_000)
+      .build();
+
+    const signed = signTransaction(tx, kp.secretKey, kp.publicKey);
+    expect(verifyTransaction(signed)).toBe(true);
   });
 });

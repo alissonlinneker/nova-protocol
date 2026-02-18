@@ -10,7 +10,7 @@
 //! block.rs  — Block structure, genesis block, hash/verify operations
 //! state.rs  — Simplified Merkle Patricia Trie for account state
 //! chain.rs  — In-memory chain management with validation
-//! db.rs     — RocksDB persistence with column families
+//! db.rs     — sled-backed persistence with separate trees per data type
 //! ```
 //!
 //! ## Data Flow
@@ -32,9 +32,9 @@
 //!    all BLAKE3. It's faster than SHA-256 on every architecture that matters,
 //!    and security margins are comparable.
 //!
-//! 2. **Column families in RocksDB.** Blocks, state, transactions, and
-//!    receipts each get their own CF. This lets us tune compaction and
-//!    caching independently per data type.
+//! 2. **Separate sled trees.** Blocks, state, transactions, and metadata
+//!    each live in their own tree. sled's lock-free B+ tree gives us
+//!    concurrent reads without contention, and atomic batches span trees.
 //!
 //! 3. **Bincode for on-disk serialization.** Compact, fast, deterministic.
 //!    JSON is for APIs and debugging; bincode is for storage.
@@ -46,5 +46,5 @@ pub mod state;
 
 pub use block::{Block, BlockHeader};
 pub use chain::Chain;
-pub use db::NovaDB;
+pub use db::{DbError, DbResult, NovaDB};
 pub use state::{AccountState, StateTree};
