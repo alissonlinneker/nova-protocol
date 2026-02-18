@@ -30,6 +30,7 @@
 //!   node binary via axum. The protocol crate stays transport-agnostic.
 
 pub mod consensus;
+pub mod consensus_loop;
 pub mod gossip;
 pub mod mempool;
 pub mod node;
@@ -41,7 +42,11 @@ pub use consensus::{
     ConsensusConfig, ConsensusEngine, ConsensusRound, FinalizedBlock, ValidatorInfo, ValidatorSet,
     Vote,
 };
-pub use gossip::{GossipAction, GossipConfig, GossipMessage, GossipProtocol, PeerInfo};
+pub use consensus_loop::{ConsensusLoop, ConsensusLoopConfig, ConsensusLoopError};
+pub use gossip::{
+    GossipAction, GossipBehaviour, GossipConfig, GossipError, GossipMessage, GossipProtocol,
+    GossipService, GossipServiceConfig, GossipTopics, P2pGossipMessage, PeerInfo,
+};
 pub use mempool::{Mempool, MempoolConfig, MempoolEntry, MempoolError};
 pub use node::{NodeStatus, ValidatorNode};
 pub use producer::{BlockProducer, BlockProductionError, ProducedBlock, TxResult};

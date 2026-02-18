@@ -17,8 +17,6 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://github.com/alissonlinneker/nova-protocol/actions"><img src="https://img.shields.io/github/actions/workflow/status/alissonlinneker/nova-protocol/ci.yml?branch=main&label=CI&logo=github" alt="CI Status"></a>
   <a href="https://codecov.io/gh/alissonlinneker/nova-protocol"><img src="https://img.shields.io/codecov/c/github/alissonlinneker/nova-protocol?logo=codecov" alt="Coverage"></a>
-  <a href="https://docs.novaprotocol.io"><img src="https://img.shields.io/badge/docs-novaprotocol.io-green?logo=readthedocs" alt="Docs"></a>
-  <a href="https://discord.gg/novaprotocol"><img src="https://img.shields.io/discord/1234567890?logo=discord&label=Discord&color=5865F2" alt="Discord"></a>
 </p>
 
 <br />
@@ -1556,13 +1554,7 @@ SOFTWARE.
   <br />
   <strong>Built with conviction. Shipped with confidence.</strong>
   <br />
-  <sub>Created by <a href="https://alastechnology.com">ALAS Technology</a></sub>
-  <br />
-  <br />
-  <a href="https://novaprotocol.io">novaprotocol.io</a> &nbsp;|&nbsp;
-  <a href="https://docs.novaprotocol.io">Documentation</a> &nbsp;|&nbsp;
-  <a href="https://discord.gg/novaprotocol">Discord</a> &nbsp;|&nbsp;
-  <a href="https://twitter.com/novaprotocol">Twitter</a>
+  <sub>Created by ALAS Technology</sub>
   <br />
   <br />
 </p>

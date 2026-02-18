@@ -27,7 +27,6 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/alissonlinneker/nova-protocol"
 Repository = "https://github.com/alissonlinneker/nova-protocol"
-Documentation = "https://docs.novaprotocol.io"
 dependencies = [
     "cryptography>=42.0",
     "pydantic>=2.6",
