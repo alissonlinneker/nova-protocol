@@ -256,7 +256,7 @@ mod tests {
         tx.id = tx.compute_id();
 
         // Structural validation: BalanceProof::from_bytes should fail on garbage.
-        let result = BalanceProof::from_bytes(&tx.proof.as_ref().unwrap());
+        let result = BalanceProof::from_bytes(tx.proof.as_ref().unwrap());
         assert!(result.is_err(), "corrupted proof must fail deserialization");
     }
 

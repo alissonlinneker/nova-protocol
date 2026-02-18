@@ -34,12 +34,12 @@ use parking_lot::RwLock;
 use tracing::{debug, info};
 
 use crate::crypto::keys::NovaKeypair;
+use crate::network::mempool::Mempool;
 use crate::storage::block::Block;
 use crate::storage::db::{DbError, NovaDB};
 use crate::storage::state::{apply_transfer, StateError, StateTree};
-use crate::network::mempool::Mempool;
-use crate::transaction::Transaction;
 use crate::transaction::types::TransactionType;
+use crate::transaction::Transaction;
 
 // ---------------------------------------------------------------------------
 // Error Type
@@ -374,19 +374,25 @@ impl BlockProducer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crypto::keys::NovaKeypair;
+    use crate::network::mempool::{Mempool, MempoolConfig};
     use crate::storage::db::NovaDB;
     use crate::storage::state::{AccountState, StateTree};
-    use crate::network::mempool::{Mempool, MempoolConfig};
     use crate::transaction::builder::TransactionBuilder;
     use crate::transaction::types::{Amount, Currency, TransactionType};
-    use crate::crypto::keys::NovaKeypair;
 
     // -- Test Helpers -------------------------------------------------------
 
     /// Spins up a complete block production environment with temporary storage.
     /// Returns the producer, its genesis block, and raw references to the
     /// shared state tree and mempool for direct inspection in tests.
-    fn setup() -> (BlockProducer, Block, Arc<RwLock<StateTree>>, Arc<Mempool>, Arc<NovaDB>) {
+    fn setup() -> (
+        BlockProducer,
+        Block,
+        Arc<RwLock<StateTree>>,
+        Arc<Mempool>,
+        Arc<NovaDB>,
+    ) {
         let db = Arc::new(NovaDB::open_temporary().expect("temp db"));
         let state_tree = Arc::new(RwLock::new(StateTree::new((*db).clone())));
         let mempool = Arc::new(Mempool::new(MempoolConfig::default()));
@@ -402,7 +408,13 @@ mod tests {
     }
 
     /// Creates a transfer transaction with explicit parameters.
-    fn make_transfer(sender: &str, receiver: &str, amount: u64, fee: u64, nonce: u64) -> Transaction {
+    fn make_transfer(
+        sender: &str,
+        receiver: &str,
+        amount: u64,
+        fee: u64,
+        nonce: u64,
+    ) -> Transaction {
         TransactionBuilder::new(TransactionType::Transfer)
             .sender(sender)
             .receiver(receiver)
@@ -718,13 +730,7 @@ mod tests {
         let mempool_clone = Arc::clone(&mempool);
         let writer = thread::spawn(move || {
             for i in 100..110u64 {
-                let tx = make_transfer(
-                    &format!("nova1writer_{}", i),
-                    "nova1receiver",
-                    10,
-                    50,
-                    i,
-                );
+                let tx = make_transfer(&format!("nova1writer_{}", i), "nova1receiver", 10, 50, i);
                 let _ = mempool_clone.add(tx);
             }
         });

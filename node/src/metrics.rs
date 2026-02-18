@@ -16,6 +16,7 @@ use std::sync::Arc;
 /// Clone-friendly (wraps `Arc` internally via prometheus handles) so it can
 /// be shared across request handlers and background tasks.
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct NodeMetrics {
     /// Prometheus registry that owns all metrics below.
     registry: Registry,

@@ -57,6 +57,7 @@ pub struct AppState {
     /// Broadcast channel for live event notifications (blocks, txs).
     pub event_tx: broadcast::Sender<NodeEvent>,
     /// Reference to Prometheus metrics for in-handler recording.
+    #[allow(dead_code)]
     pub metrics: SharedMetrics,
     /// Persistent storage engine for blocks, transactions, and accounts.
     pub db: Arc<NovaDB>,
@@ -467,7 +468,7 @@ async fn handle_ws_connection(mut socket: WebSocket, state: AppState) {
                                 continue;
                             }
                         };
-                        if socket.send(Message::Text(payload.into())).await.is_err() {
+                        if socket.send(Message::Text(payload)).await.is_err() {
                             // Client disconnected.
                             break;
                         }

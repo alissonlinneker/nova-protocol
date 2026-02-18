@@ -224,7 +224,7 @@ pub fn merkle_root(leaves: &[[u8; 32]]) -> [u8; 32] {
     }
 
     while current_level.len() > 1 {
-        let mut next_level = Vec::with_capacity((current_level.len() + 1) / 2);
+        let mut next_level = Vec::with_capacity(current_level.len().div_ceil(2));
 
         for chunk in current_level.chunks(2) {
             let left = &chunk[0];

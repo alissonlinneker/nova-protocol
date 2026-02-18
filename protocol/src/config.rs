@@ -108,7 +108,7 @@ pub const HASH_OUTPUT_LENGTH: usize = 32;
 /// 1. Groth16 support is mature in arkworks.
 /// 2. Ethereum precompiles exist for it (interop matters).
 /// 3. The proving times are acceptable for payment-sized circuits.
-/// Yes, BLS12-381 has better security margins, but we need EVM compatibility.
+///    Yes, BLS12-381 has better security margins, but we need EVM compatibility.
 pub const ZKP_CURVE: &str = "BN254";
 
 /// Maximum circuit constraint count we're willing to tolerate.
@@ -324,8 +324,8 @@ mod tests {
     fn test_fee_constants_sanity() {
         // Min fee should be less than max fee. Obvious, but stranger things
         // have shipped to production.
-        assert!(MIN_TX_FEE_PHOTONS < MAX_TX_FEE_PHOTONS);
-        assert!(FEE_PER_BYTE > 0);
+        const { assert!(MIN_TX_FEE_PHOTONS < MAX_TX_FEE_PHOTONS) };
+        const { assert!(FEE_PER_BYTE > 0) };
     }
 
     #[test]

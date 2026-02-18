@@ -45,7 +45,7 @@ const EVENT_CHANNEL_CAPACITY: usize = 256;
 const DEV_ACCOUNT_COUNT: u64 = 10;
 
 /// Dev mode: initial balance per test account (1M NOVA = 1_000_000 * 10^8 photons).
-const DEV_ACCOUNT_BALANCE: u64 = 1_000_000_00000000;
+const DEV_ACCOUNT_BALANCE: u64 = 100_000_000_000_000;
 
 /// Dev mode: default validator stake (100 NOVA = 10B photons).
 const DEV_VALIDATOR_STAKE: u64 = 10_000_000_000;
@@ -133,13 +133,13 @@ async fn run_node(args: cli::RunArgs) -> Result<()> {
     // --- 4. Open NovaDB ---
     let db = if args.dev {
         Arc::new(
-            NovaDB::open_temporary()
-                .context("failed to open temporary database for dev mode")?,
+            NovaDB::open_temporary().context("failed to open temporary database for dev mode")?,
         )
     } else {
         let db_path = data_dir.join("db");
-        std::fs::create_dir_all(&db_path)
-            .with_context(|| format!("failed to create database directory: {}", db_path.display()))?;
+        std::fs::create_dir_all(&db_path).with_context(|| {
+            format!("failed to create database directory: {}", db_path.display())
+        })?;
         Arc::new(
             NovaDB::open(&db_path)
                 .with_context(|| format!("failed to open database at {}", db_path.display()))?,
@@ -413,8 +413,12 @@ fn init_node(args: cli::InitArgs) -> Result<()> {
         .with_context(|| format!("failed to create db directory: {}", db_dir.display()))?;
     std::fs::create_dir_all(&keys_dir)
         .with_context(|| format!("failed to create keys directory: {}", keys_dir.display()))?;
-    std::fs::create_dir_all(&config_dir)
-        .with_context(|| format!("failed to create config directory: {}", config_dir.display()))?;
+    std::fs::create_dir_all(&config_dir).with_context(|| {
+        format!(
+            "failed to create config directory: {}",
+            config_dir.display()
+        )
+    })?;
 
     // Generate validator keypair.
     let keypair = NovaKeypair::generate();
@@ -459,7 +463,10 @@ fn init_node(args: cli::InitArgs) -> Result<()> {
     println!("  DB directory   : {}", db_dir.display());
     println!("  Genesis block  : persisted at height 0");
     println!();
-    println!("Run `nova-node run -d {}` to start the node.", data_dir.display());
+    println!(
+        "Run `nova-node run -d {}` to start the node.",
+        data_dir.display()
+    );
 
     Ok(())
 }
@@ -600,9 +607,7 @@ fn generate_dev_seed(index: u64) -> [u8; 32] {
 /// address for each, and credits each account with 1M NOVA (10^14 photons).
 ///
 /// Returns the list of funded NOVA addresses.
-async fn prefund_dev_accounts(
-    state_tree: &Arc<RwLock<StateTree>>,
-) -> Vec<String> {
+async fn prefund_dev_accounts(state_tree: &Arc<RwLock<StateTree>>) -> Vec<String> {
     let mut addresses = Vec::with_capacity(DEV_ACCOUNT_COUNT as usize);
     let mut tree = state_tree.write().await;
 
@@ -667,10 +672,18 @@ fn print_startup_banner(
 
     println!();
     println!("\u{2554}{}\u{2557}", border);
-    println!("\u{2551}  {:<width$}  \u{2551}", title.trim(), width = max_width - 4);
+    println!(
+        "\u{2551}  {:<width$}  \u{2551}",
+        title.trim(),
+        width = max_width - 4
+    );
     println!("\u{2560}{}\u{2563}", border);
     for line in &lines {
-        println!("\u{2551}  {:<width$}  \u{2551}", line.trim(), width = max_width - 4);
+        println!(
+            "\u{2551}  {:<width$}  \u{2551}",
+            line.trim(),
+            width = max_width - 4
+        );
     }
     println!("\u{255A}{}\u{255D}", border);
     println!();
@@ -827,9 +840,7 @@ mod tests {
 
     #[test]
     fn dev_seed_unique_per_index() {
-        let seeds: Vec<[u8; 32]> = (1..=DEV_ACCOUNT_COUNT)
-            .map(generate_dev_seed)
-            .collect();
+        let seeds: Vec<[u8; 32]> = (1..=DEV_ACCOUNT_COUNT).map(generate_dev_seed).collect();
 
         // Each seed must be unique.
         for (i, a) in seeds.iter().enumerate() {

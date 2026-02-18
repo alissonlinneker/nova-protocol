@@ -767,7 +767,7 @@ mod tests {
     fn make_peer(id: &str) -> PeerInfo {
         PeerInfo {
             peer_id: id.to_string(),
-            address: format!("/ip4/127.0.0.1/tcp/9740"),
+            address: "/ip4/127.0.0.1/tcp/9740".to_string(),
             connected_at: 1000,
             last_seen: 1000,
         }
@@ -1072,7 +1072,7 @@ mod tests {
     #[test]
     fn large_block_serialization() {
         let genesis = Block::genesis();
-        let txs: Vec<Transaction> = (0..100).map(|i| make_test_tx(i)).collect();
+        let txs: Vec<Transaction> = (0..100).map(make_test_tx).collect();
         let block = Block::new(&genesis, txs, "nova:validator".to_string(), [1u8; 32]);
 
         let msg = P2pGossipMessage::NewBlock(block.clone());
@@ -1174,7 +1174,9 @@ mod tests {
         let (service, mut rx) = GossipService::new(config, &keypair);
 
         let tx = make_test_tx(42);
-        service.publish_transaction(&tx).expect("publish should succeed");
+        service
+            .publish_transaction(&tx)
+            .expect("publish should succeed");
 
         let received = rx.try_recv().expect("should receive message");
         match received {
@@ -1192,7 +1194,9 @@ mod tests {
         let (service, mut rx) = GossipService::new(config, &keypair);
 
         let block = make_test_block();
-        service.publish_block(&block).expect("publish should succeed");
+        service
+            .publish_block(&block)
+            .expect("publish should succeed");
 
         let received = rx.try_recv().expect("should receive message");
         match received {

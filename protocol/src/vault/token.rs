@@ -299,7 +299,7 @@ impl Token {
     /// * `decimals` -- Display decimal places (e.g., 2 for BRL, 8 for BTC)
     /// * `token_type` -- Backing model classification
     /// * `issuer` -- NOVA address of the authorized issuer
-    pub fn new(
+    pub fn create(
         name: &str,
         symbol: &str,
         decimals: u8,
@@ -331,7 +331,7 @@ impl Token {
         issuer: &str,
         initial_supply: u64,
     ) -> TokenInfo {
-        let mut info = Self::new(name, symbol, decimals, token_type, issuer);
+        let mut info = Self::create(name, symbol, decimals, token_type, issuer);
         info.total_supply = initial_supply;
         info
     }
@@ -352,7 +352,7 @@ const SYSTEM_ISSUER: &str = "nova:0000000000000000000000000000000000000000000000
 /// primary market: Pix-compatible payments, merchant settlement, and
 /// cross-border remittances to/from Brazil.
 pub fn nova_brl() -> TokenInfo {
-    Token::new(
+    Token::create(
         "NOVA Brazilian Real",
         "nBRL",
         2,
@@ -366,7 +366,7 @@ pub fn nova_brl() -> TokenInfo {
 /// 2 decimal places (cents). Used for USD-denominated payments and as a
 /// settlement currency for international transactions.
 pub fn nova_usd() -> TokenInfo {
-    Token::new(
+    Token::create(
         "NOVA US Dollar",
         "nUSD",
         2,
@@ -379,7 +379,7 @@ pub fn nova_usd() -> TokenInfo {
 ///
 /// 2 decimal places (euro cents).
 pub fn nova_eur() -> TokenInfo {
-    Token::new(
+    Token::create(
         "NOVA Euro",
         "nEUR",
         2,
@@ -393,7 +393,7 @@ pub fn nova_eur() -> TokenInfo {
 /// 8 decimal places (satoshis). Bridged from the Bitcoin network via
 /// a federated peg or trustless bridge (implementation TBD).
 pub fn nova_btc() -> TokenInfo {
-    Token::new(
+    Token::create(
         "NOVA Bitcoin",
         "nBTC",
         8,
@@ -406,7 +406,7 @@ pub fn nova_btc() -> TokenInfo {
 ///
 /// 18 decimal places (wei). Bridged from Ethereum.
 pub fn nova_eth() -> TokenInfo {
-    Token::new(
+    Token::create(
         "NOVA Ether",
         "nETH",
         18,
@@ -419,7 +419,7 @@ pub fn nova_eth() -> TokenInfo {
 ///
 /// 6 decimal places (matching native USDC on Ethereum/Solana).
 pub fn nova_usdc() -> TokenInfo {
-    Token::new(
+    Token::create(
         "NOVA USDC",
         "nUSDC",
         6,
@@ -432,7 +432,7 @@ pub fn nova_usdc() -> TokenInfo {
 ///
 /// 6 decimal places.
 pub fn nova_usdt() -> TokenInfo {
-    Token::new(
+    Token::create(
         "NOVA USDT",
         "nUSDT",
         6,
@@ -533,7 +533,7 @@ mod tests {
 
     #[test]
     fn token_factory_sets_zero_supply() {
-        let token = Token::new("Test Token", "TST", 8, TokenType::Native, "nova:issuer");
+        let token = Token::create("Test Token", "TST", 8, TokenType::Native, "nova:issuer");
         assert_eq!(token.total_supply, 0);
         assert_eq!(token.symbol, "TST");
         assert_eq!(token.decimals, 8);

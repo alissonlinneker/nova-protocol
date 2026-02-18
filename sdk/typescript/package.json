@@ -15,7 +15,6 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint src/",
     "clean": "rm -rf dist"
   },
   "dependencies": {

@@ -245,10 +245,8 @@ impl Block {
         }
 
         // 3. Genesis-specific checks.
-        if self.header.height == 0 {
-            if self.header.parent_hash != [0u8; 32] {
-                return Err("genesis block must have zeroed parent_hash".to_string());
-            }
+        if self.header.height == 0 && self.header.parent_hash != [0u8; 32] {
+            return Err("genesis block must have zeroed parent_hash".to_string());
         }
 
         Ok(())
@@ -323,7 +321,7 @@ pub fn compute_merkle_root(transactions: &[Transaction]) -> [u8; 32] {
 
     // Build the tree bottom-up.
     while hashes.len() > 1 {
-        let mut next_level = Vec::with_capacity((hashes.len() + 1) / 2);
+        let mut next_level = Vec::with_capacity(hashes.len().div_ceil(2));
         for chunk in hashes.chunks(2) {
             if chunk.len() == 2 {
                 let mut combined = Vec::with_capacity(64);
@@ -439,7 +437,7 @@ mod tests {
     #[test]
     fn merkle_root_single_tx() {
         let tx = make_test_tx(1);
-        let root = compute_merkle_root(&[tx.clone()]);
+        let root = compute_merkle_root(std::slice::from_ref(&tx));
         let expected = blake3_hash(&serde_json::to_vec(&tx).unwrap());
         assert_eq!(root, expected);
     }

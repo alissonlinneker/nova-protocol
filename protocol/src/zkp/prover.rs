@@ -137,7 +137,7 @@ impl BalanceProof {
     /// Reconstruct a proof from compressed bytes.
     pub fn from_bytes(data: &[u8]) -> Result<Self> {
         // Validate that the bytes actually decode to a valid Groth16 proof.
-        let _proof = ark_groth16::Proof::<Bn254>::deserialize_compressed(&data[..])
+        let _proof = ark_groth16::Proof::<Bn254>::deserialize_compressed(data)
             .context("invalid Groth16 proof bytes")?;
 
         Ok(Self {

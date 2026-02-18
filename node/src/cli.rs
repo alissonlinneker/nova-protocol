@@ -262,7 +262,8 @@ mod tests {
 
     #[test]
     fn init_subcommand_force_flag() {
-        let args = NovaNodeCli::parse_from(["nova-node", "init", "--force", "--network", "testnet"]);
+        let args =
+            NovaNodeCli::parse_from(["nova-node", "init", "--force", "--network", "testnet"]);
         match args.command {
             Commands::Init(init) => {
                 assert!(init.force);
@@ -285,12 +286,8 @@ mod tests {
 
     #[test]
     fn status_subcommand_custom_url() {
-        let args = NovaNodeCli::parse_from([
-            "nova-node",
-            "status",
-            "--rpc-url",
-            "http://my-node:9741",
-        ]);
+        let args =
+            NovaNodeCli::parse_from(["nova-node", "status", "--rpc-url", "http://my-node:9741"]);
         match args.command {
             Commands::Status(status) => {
                 assert_eq!(status.rpc_url, "http://my-node:9741");
@@ -344,7 +341,7 @@ mod tests {
     #[test]
     fn format_nova_amount_whole_number() {
         assert_eq!(format_nova_amount(100_000_000), "1.00000000");
-        assert_eq!(format_nova_amount(1_000_000_00000000), "1000000.00000000");
+        assert_eq!(format_nova_amount(100_000_000_000_000), "1000000.00000000");
     }
 
     #[test]
@@ -360,13 +357,8 @@ mod tests {
 
     #[test]
     fn run_with_stake() {
-        let args = NovaNodeCli::parse_from([
-            "nova-node",
-            "run",
-            "--validator",
-            "--stake",
-            "10000000000",
-        ]);
+        let args =
+            NovaNodeCli::parse_from(["nova-node", "run", "--validator", "--stake", "10000000000"]);
         match args.command {
             Commands::Run(run) => {
                 assert!(run.validator);

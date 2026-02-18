@@ -270,11 +270,7 @@ impl SyncEngine {
     ///
     /// The engine starts idle — no sync activity happens until the caller
     /// invokes `apply_blocks` with downloaded data.
-    pub fn new(
-        db: Arc<NovaDB>,
-        state_tree: Arc<RwLock<StateTree>>,
-        config: SyncConfig,
-    ) -> Self {
+    pub fn new(db: Arc<NovaDB>, state_tree: Arc<RwLock<StateTree>>, config: SyncConfig) -> Self {
         Self {
             db,
             state_tree,
@@ -290,9 +286,9 @@ impl SyncEngine {
     pub fn local_chain_tip(&self) -> Result<(u64, [u8; 32]), SyncError> {
         match self.db.get_latest_block_height()? {
             Some(height) => {
-                let block = self.db.get_block(height)?.ok_or_else(|| SyncError::DbError(
-                    DbError::NotFound(format!("block at height {}", height)),
-                ))?;
+                let block = self.db.get_block(height)?.ok_or_else(|| {
+                    SyncError::DbError(DbError::NotFound(format!("block at height {}", height)))
+                })?;
                 Ok((height, block.header.hash))
             }
             None => {
@@ -310,15 +306,13 @@ impl SyncEngine {
     /// a `SyncResponse`. No state mutation happens here — it's pure reads.
     pub fn process_sync_request(&self, request: SyncRequest) -> SyncResponse {
         match request {
-            SyncRequest::GetChainTip => {
-                match self.local_chain_tip() {
-                    Ok((height, hash)) => SyncResponse::ChainTip {
-                        height,
-                        block_hash: hash,
-                    },
-                    Err(e) => SyncResponse::Error(format!("failed to read chain tip: {}", e)),
-                }
-            }
+            SyncRequest::GetChainTip => match self.local_chain_tip() {
+                Ok((height, hash)) => SyncResponse::ChainTip {
+                    height,
+                    block_hash: hash,
+                },
+                Err(e) => SyncResponse::Error(format!("failed to read chain tip: {}", e)),
+            },
 
             SyncRequest::GetBlocks { start, end } => {
                 if start >= end {
@@ -335,15 +329,13 @@ impl SyncEngine {
                 }
             }
 
-            SyncRequest::GetBlock { height } => {
-                match self.db.get_block(height) {
-                    Ok(block) => SyncResponse::Block(block),
-                    Err(e) => SyncResponse::Error(format!(
-                        "failed to read block at height {}: {}",
-                        height, e,
-                    )),
-                }
-            }
+            SyncRequest::GetBlock { height } => match self.db.get_block(height) {
+                Ok(block) => SyncResponse::Block(block),
+                Err(e) => SyncResponse::Error(format!(
+                    "failed to read block at height {}: {}",
+                    height, e,
+                )),
+            },
         }
     }
 
@@ -383,17 +375,22 @@ impl SyncEngine {
             [0u8; 32] // Genesis block's parent is all zeros.
         } else {
             // Look up the block just before the batch start.
-            let prev = self.db.get_block(first_height - 1)?.ok_or_else(|| {
-                SyncError::ChainGap {
+            let prev = self
+                .db
+                .get_block(first_height - 1)?
+                .ok_or_else(|| SyncError::ChainGap {
                     expected: first_height - 1,
                     got: first_height,
-                }
-            })?;
+                })?;
             prev.header.hash
         };
 
         let mut prev_hash = expected_parent_hash;
-        let mut prev_height = if first_height == 0 { 0 } else { first_height - 1 };
+        let mut prev_height = if first_height == 0 {
+            0
+        } else {
+            first_height - 1
+        };
 
         for (i, block) in blocks.iter().enumerate() {
             // Verify block integrity (hash + Merkle root).
@@ -403,7 +400,11 @@ impl SyncEngine {
             })?;
 
             // Verify height continuity.
-            let expected_height = if i == 0 { first_height } else { prev_height + 1 };
+            let expected_height = if i == 0 {
+                first_height
+            } else {
+                prev_height + 1
+            };
             if block.header.height != expected_height {
                 return Err(SyncError::ChainGap {
                     expected: expected_height,
@@ -586,7 +587,12 @@ mod tests {
     }
 
     /// Creates a test transfer transaction.
-    fn make_test_tx(sender: &str, receiver: &str, amount: u64, nonce: u64) -> crate::transaction::Transaction {
+    fn make_test_tx(
+        sender: &str,
+        receiver: &str,
+        amount: u64,
+        nonce: u64,
+    ) -> crate::transaction::Transaction {
         TransactionBuilder::new(TransactionType::Transfer)
             .sender(sender)
             .receiver(receiver)
@@ -607,7 +613,6 @@ mod tests {
         }
         chain
     }
-
 
     // -- 1. local_chain_tip_empty_db ----------------------------------------
 
@@ -669,10 +674,7 @@ mod tests {
         }
 
         // Request blocks [1, 4) = heights 1, 2, 3
-        let response = engine.process_sync_request(SyncRequest::GetBlocks {
-            start: 1,
-            end: 4,
-        });
+        let response = engine.process_sync_request(SyncRequest::GetBlocks { start: 1, end: 4 });
         match response {
             SyncResponse::Blocks(blocks) => {
                 assert_eq!(blocks.len(), 3);
@@ -780,7 +782,12 @@ mod tests {
 
         // Build a block with a transfer.
         let tx = make_test_tx("nova1alice", "nova1bob", 3_000, 0);
-        let block1 = Block::new(&genesis, vec![tx], "nova:validator_1".to_string(), [1u8; 32]);
+        let block1 = Block::new(
+            &genesis,
+            vec![tx],
+            "nova:validator_1".to_string(),
+            [1u8; 32],
+        );
 
         let result = engine.apply_blocks(vec![block1]).unwrap();
 
@@ -956,7 +963,7 @@ mod tests {
         let alice = tree.get("nova1alice").unwrap();
         let bob = tree.get("nova1bob").unwrap();
         assert_eq!(alice.balance, 97_000); // 100_000 - 3 * 1_000
-        assert_eq!(bob.balance, 3_000);    // 3 * 1_000
+        assert_eq!(bob.balance, 3_000); // 3 * 1_000
     }
 
     // -- 18. config_defaults ------------------------------------------------
@@ -977,10 +984,7 @@ mod tests {
         let (engine, _db, _tree) = setup();
 
         // start >= end should return an empty blocks vec.
-        let response = engine.process_sync_request(SyncRequest::GetBlocks {
-            start: 5,
-            end: 5,
-        });
+        let response = engine.process_sync_request(SyncRequest::GetBlocks { start: 5, end: 5 });
         match response {
             SyncResponse::Blocks(blocks) => assert!(blocks.is_empty()),
             other => panic!("expected empty Blocks, got: {:?}", other),

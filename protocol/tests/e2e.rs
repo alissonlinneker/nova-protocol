@@ -31,6 +31,7 @@ use nova_protocol::transaction::verification::verify_transaction;
 
 /// Spins up the full block production stack with temporary storage.
 /// Returns all the shared components so tests can inspect them directly.
+#[allow(clippy::type_complexity)]
 fn setup() -> (
     BlockProducer,
     Block,
@@ -219,7 +220,7 @@ fn chain_of_blocks() {
     let bob = t.get(&bob_addr).unwrap();
     let charlie = t.get(&charlie_addr).unwrap();
     assert_eq!(alice.balance, 9_200); // 10000 - 1000 + 200
-    assert_eq!(bob.balance, 500);     // 1000 - 500
+    assert_eq!(bob.balance, 500); // 1000 - 500
     assert_eq!(charlie.balance, 300); // 500 - 200
 
     // Verify we have 4 blocks (genesis + 3).
@@ -544,7 +545,10 @@ fn state_tree_merkle_proof_after_transfer() {
     // Verify the inclusion proof against the current state root.
     let root = t.root();
     let valid = StateTree::verify_proof(&root, &alice_addr, Some(&alice_state), &proof);
-    assert!(valid, "inclusion proof for sender should verify after transfer");
+    assert!(
+        valid,
+        "inclusion proof for sender should verify after transfer"
+    );
 
     // Verify an incorrect value does not pass.
     let wrong_state = AccountState::with_balance(99_999);
@@ -631,14 +635,7 @@ fn large_block_stress_test() {
 
     // Each account sends 100 NOVA to the receiver.
     for i in 0..100 {
-        let tx = build_signed_transfer(
-            &keypairs[i],
-            &addresses[i],
-            &receiver_addr,
-            100,
-            50,
-            1,
-        );
+        let tx = build_signed_transfer(&keypairs[i], &addresses[i], &receiver_addr, 100, 50, 1);
         mempool.add(tx).unwrap();
     }
 
@@ -693,11 +690,17 @@ fn db_persistence_survives_reopen() {
     {
         let db = NovaDB::open(dir.path()).expect("reopen db");
 
-        let retrieved_genesis = db.get_block(0).unwrap().expect("genesis should survive reopen");
+        let retrieved_genesis = db
+            .get_block(0)
+            .unwrap()
+            .expect("genesis should survive reopen");
         assert_eq!(retrieved_genesis.header.height, 0);
         assert_eq!(retrieved_genesis.header.hash, genesis.header.hash);
 
-        let retrieved_block1 = db.get_block(1).unwrap().expect("block 1 should survive reopen");
+        let retrieved_block1 = db
+            .get_block(1)
+            .unwrap()
+            .expect("block 1 should survive reopen");
         assert_eq!(retrieved_block1.header.height, 1);
         assert_eq!(retrieved_block1.header.state_root, [42u8; 32]);
 

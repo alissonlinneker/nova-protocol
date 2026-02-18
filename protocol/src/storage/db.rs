@@ -161,7 +161,7 @@ impl NovaDB {
         self.blocks.apply_batch(block_batch)?;
 
         // Index block hash -> height.
-        self.block_hashes.insert(&block.header.hash, &height_key)?;
+        self.block_hashes.insert(block.header.hash, &height_key)?;
 
         // Persist each transaction.
         let mut tx_batch = Batch::default();

@@ -372,7 +372,10 @@ impl ConsensusLoop {
     /// falls back to the genesis block. This handles both fresh starts
     /// (genesis only) and restarts after producing blocks.
     fn get_latest_block(&self) -> Result<Block, ConsensusLoopError> {
-        let height = self.db.get_latest_block_height().map_err(ConsensusLoopError::DbError)?;
+        let height = self
+            .db
+            .get_latest_block_height()
+            .map_err(ConsensusLoopError::DbError)?;
 
         match height {
             Some(h) => {

@@ -109,7 +109,7 @@ impl PedersenParams {
 
     /// Deserialize parameters from compressed bytes.
     pub fn from_bytes(data: &[u8]) -> Result<Self, ark_serialize::SerializationError> {
-        Self::deserialize_compressed(&data[..])
+        Self::deserialize_compressed(data)
     }
 }
 
@@ -161,7 +161,7 @@ impl Commitment {
 
     /// Deserialize commitment from compressed bytes.
     pub fn from_bytes(data: &[u8]) -> Result<Self, ark_serialize::SerializationError> {
-        Self::deserialize_compressed(&data[..])
+        Self::deserialize_compressed(data)
     }
 }
 

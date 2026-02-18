@@ -164,8 +164,10 @@ pub struct HandshakeSession {
     /// Ephemeral DH secret (consumed during `complete`).
     ephemeral_secret: Option<EphemeralSecret>,
     /// Ephemeral DH public key (sent in the request/response).
+    #[allow(dead_code)]
     ephemeral_public: [u8; 32],
     /// The request we sent (if we are the initiator).
+    #[allow(dead_code)]
     pending_request: Option<HandshakeRequest>,
 }
 

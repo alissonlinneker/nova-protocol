@@ -89,7 +89,7 @@ impl BalanceVerifier {
 
     /// Deserialize a verification key from bytes.
     pub fn vk_from_bytes(data: &[u8], params: PedersenParams) -> Result<Self> {
-        let vk = VerifyingKey::<Bn254>::deserialize_compressed(&data[..])
+        let vk = VerifyingKey::<Bn254>::deserialize_compressed(data)
             .context("failed to deserialize verification key")?;
         Ok(Self { vk, params })
     }

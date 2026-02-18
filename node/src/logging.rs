@@ -10,6 +10,7 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 
 /// Log output format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum LogFormat {
     /// Human-readable, colored output. Suitable for local development.
     Pretty,
@@ -20,6 +21,7 @@ pub enum LogFormat {
 impl LogFormat {
     /// Parse a format string. Accepts "json" or "pretty" (case-insensitive).
     /// Returns `Pretty` for any unrecognized value.
+    #[allow(dead_code)]
     pub fn from_str_lossy(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "json" => LogFormat::Json,

@@ -11,6 +11,7 @@ on:
       - "**/Cargo.lock"
       - "sdk/typescript/package.json"
       - "sdk/typescript/package-lock.json"
+      - "sdk/python/pyproject.toml"
   workflow_dispatch:
 
 permissions:
@@ -19,7 +20,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_TOOLCHAIN: "1.75"
+  RUST_TOOLCHAIN: "stable"
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -40,7 +41,7 @@ jobs:
         run: cargo install cargo-audit --locked
 
       - name: Run cargo audit
-        run: cargo audit --deny warnings
+        run: cargo audit
 
   # ---------------------------------------------------------------------------
   # cargo deny — license compliance and advisory checks

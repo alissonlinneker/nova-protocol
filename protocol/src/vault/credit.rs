@@ -558,7 +558,7 @@ impl CreditLineManager {
 
         let weighted_sum: u64 = active_lines
             .iter()
-            .map(|l| l.limit as u64 * l.interest_rate_bps as u64)
+            .map(|l| l.limit * l.interest_rate_bps as u64)
             .sum();
 
         Some((weighted_sum / total_limit) as u32)
