@@ -1,0 +1,29 @@
+[package]
+name = "nova-node"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "NOVA Protocol validator node"
+
+[[bin]]
+name = "nova-node"
+path = "src/main.rs"
+
+[dependencies]
+nova-protocol = { path = "../protocol" }
+tokio = { workspace = true }
+clap = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+prometheus = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+futures = { workspace = true }
+hex = { workspace = true }

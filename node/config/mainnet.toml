@@ -1,0 +1,34 @@
+# NOVA Protocol — Mainnet Configuration
+#
+# Production network. State is permanent, stake requirements are real,
+# and mistakes cost real money. Proceed with the appropriate level of
+# caution (i.e., paranoia).
+
+[network]
+network_id = "mainnet"
+chain_id = 0x4E4F5641          # "NOVA"
+block_time_ms = 2000
+min_validators = 100
+min_stake = 100000_00000000    # 100,000 NOVA (8 decimal places)
+
+[ports]
+rpc_port = 9741
+p2p_port = 9740
+metrics_port = 9742
+
+[boot_nodes]
+addresses = [
+    "/dns4/boot1.novaprotocol.io/tcp/9740",
+    "/dns4/boot2.novaprotocol.io/tcp/9740",
+    "/dns4/boot3.novaprotocol.io/tcp/9740",
+    "/dns4/boot4.novaprotocol.io/tcp/9740",
+    "/dns4/boot5.novaprotocol.io/tcp/9740",
+]
+
+[consensus]
+finality_timeout_ms = 30000
+max_block_size_bytes = 4194304  # 4 MiB
+
+[logging]
+default_level = "info"
+format = "json"

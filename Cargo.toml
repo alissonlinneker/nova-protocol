@@ -1,0 +1,101 @@
+[workspace]
+resolver = "2"
+members = [
+    "protocol",
+    "node",
+    "contracts",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Alisson Linneker <alisson@alastechnology.com>"]
+license = "MIT"
+repository = "https://github.com/nova-protocol/nova-protocol"
+rust-version = "1.75"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1.36", features = ["full"] }
+
+# Cryptography
+ed25519-dalek = { version = "2.1", features = ["serde", "rand_core"] }
+curve25519-dalek = { version = "4.1", features = ["serde"] }
+x25519-dalek = { version = "2.0", features = ["serde"] }
+rand = "0.8"
+rand_core = { version = "0.6", features = ["std"] }
+sha2 = "0.10"
+blake3 = "1.5"
+aes-gcm = "0.10"
+
+# ZK Proofs (arkworks ecosystem)
+ark-ff = "0.4"
+ark-ec = "0.4"
+ark-bn254 = "0.4"
+ark-groth16 = "0.4"
+ark-snark = "0.4"
+ark-relations = "0.4"
+ark-r1cs-std = "0.4"
+ark-std = "0.4"
+ark-serialize = { version = "0.4", features = ["derive"] }
+ark-crypto-primitives = { version = "0.4", features = ["r1cs"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bincode = "1.3"
+hex = "0.4"
+bs58 = "0.5"
+bech32 = "0.11"
+
+# Networking
+libp2p = { version = "0.53", features = [
+    "tcp", "noise", "yamux", "gossipsub",
+    "identify", "kad", "tokio", "macros",
+    "request-response", "dns",
+] }
+
+# Storage
+rocksdb = "0.22"
+
+# HTTP / API
+axum = { version = "0.7", features = ["ws"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+hyper = "1.1"
+
+# Logging & Metrics
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+prometheus = "0.13"
+
+# CLI
+clap = { version = "4.4", features = ["derive", "env"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Utilities
+uuid = { version = "1.7", features = ["v4", "serde"] }
+bytes = "1.5"
+futures = "0.3"
+async-trait = "0.1"
+parking_lot = "0.12"
+dashmap = "5.5"
+
+# Testing
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+
+[profile.bench]
+opt-level = 3
+lto = "thin"

@@ -1,0 +1,114 @@
+name: Security Audit
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC
+    - cron: "0 6 * * 1"
+  push:
+    branches: [main]
+    paths:
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - "sdk/typescript/package.json"
+      - "sdk/typescript/package-lock.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # cargo audit — known vulnerability database
+  # ---------------------------------------------------------------------------
+  audit:
+    name: Cargo Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Run cargo audit
+        run: cargo audit --deny warnings
+
+  # ---------------------------------------------------------------------------
+  # cargo deny — license compliance and advisory checks
+  # ---------------------------------------------------------------------------
+  deny:
+    name: Cargo Deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Check advisories
+        run: cargo deny check advisories
+
+      - name: Check licenses
+        run: cargo deny check licenses
+
+      - name: Check bans
+        run: cargo deny check bans
+
+      - name: Check sources
+        run: cargo deny check sources
+
+  # ---------------------------------------------------------------------------
+  # npm audit — TypeScript SDK
+  # ---------------------------------------------------------------------------
+  npm-audit:
+    name: NPM Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: sdk/typescript
+        run: npm ci
+
+      - name: Run npm audit
+        working-directory: sdk/typescript
+        run: npm audit --omit=dev --audit-level=high
+
+  # ---------------------------------------------------------------------------
+  # pip audit — Python SDK
+  # ---------------------------------------------------------------------------
+  pip-audit:
+    name: Pip Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Install dependencies
+        working-directory: sdk/python
+        run: pip install -e .
+
+      - name: Run pip audit
+        working-directory: sdk/python
+        run: pip-audit

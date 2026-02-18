@@ -1,0 +1,32 @@
+# NOVA Protocol — Testnet Configuration
+#
+# Semi-stable environment for pre-production validation. State may be
+# preserved across releases, but no guarantees. Requires a modest
+# stake to discourage spam validators.
+
+[network]
+network_id = "testnet"
+chain_id = 0x4E4F5654          # "NOVT"
+block_time_ms = 2000
+min_validators = 10
+min_stake = 1000_00000000      # 1,000 NOVA (8 decimal places)
+
+[ports]
+rpc_port = 9741
+p2p_port = 9740
+metrics_port = 9742
+
+[boot_nodes]
+addresses = [
+    "/dns4/boot1.testnet.novaprotocol.io/tcp/9740",
+    "/dns4/boot2.testnet.novaprotocol.io/tcp/9740",
+    "/dns4/boot3.testnet.novaprotocol.io/tcp/9740",
+]
+
+[consensus]
+finality_timeout_ms = 30000
+max_block_size_bytes = 2097152  # 2 MiB
+
+[logging]
+default_level = "info"
+format = "json"

@@ -1,0 +1,1 @@
+//! NOVA node. Placeholder.

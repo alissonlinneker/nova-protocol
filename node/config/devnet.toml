@@ -1,0 +1,34 @@
+# NOVA Protocol — Devnet Configuration
+#
+# The wild west. Reset weekly, no uptime guarantees, minimal stake
+# requirements. Use this for local development and integration testing.
+
+[network]
+network_id = "devnet"
+chain_id = 0x4E4F5644          # "NOVD"
+block_time_ms = 2000
+min_validators = 4
+min_stake = 0                  # No minimum stake on devnet.
+
+[ports]
+rpc_port = 9741
+p2p_port = 9740
+metrics_port = 9742
+
+[boot_nodes]
+# Local devnet boot nodes — run `nova-node init` on each to generate keys.
+addresses = [
+    "/ip4/127.0.0.1/tcp/9740",
+    "/ip4/127.0.0.1/tcp/9750",
+    "/ip4/127.0.0.1/tcp/9760",
+    "/ip4/127.0.0.1/tcp/9770",
+]
+
+[consensus]
+# Devnet uses a fast finality window for rapid iteration.
+finality_timeout_ms = 10000
+max_block_size_bytes = 2097152  # 2 MiB
+
+[logging]
+default_level = "debug"
+format = "pretty"

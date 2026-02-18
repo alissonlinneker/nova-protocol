@@ -1,0 +1,89 @@
+# =============================================================================
+# NOVA Protocol — Validator Node
+# Multi-stage build for minimal, secure production images.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Stage 1: Build
+# ---------------------------------------------------------------------------
+FROM rust:1.75-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        pkg-config \
+        libssl-dev \
+        libclang-dev \
+        clang \
+        cmake \
+        make \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Cache dependency compilation by copying manifests first.
+COPY Cargo.toml Cargo.lock ./
+COPY protocol/Cargo.toml protocol/Cargo.toml
+COPY node/Cargo.toml node/Cargo.toml
+COPY contracts/Cargo.toml contracts/Cargo.toml
+
+# Create stub sources so cargo can resolve the workspace.
+RUN mkdir -p protocol/src node/src contracts/src \
+    && echo "fn main() {}" > node/src/main.rs \
+    && touch protocol/src/lib.rs \
+    && touch contracts/src/lib.rs
+
+RUN cargo build --release --package nova-node 2>/dev/null || true
+
+# Copy real sources and rebuild.
+COPY protocol/ protocol/
+COPY node/ node/
+COPY contracts/ contracts/
+
+# Touch sources so cargo detects the change over the stubs.
+RUN touch protocol/src/lib.rs node/src/main.rs contracts/src/lib.rs
+
+RUN cargo build --release --package nova-node \
+    && strip target/release/nova-node
+
+# ---------------------------------------------------------------------------
+# Stage 2: Runtime
+# ---------------------------------------------------------------------------
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        libssl3 \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Non-root user
+RUN groupadd --gid 1000 nova \
+    && useradd --uid 1000 --gid nova --shell /bin/false --create-home nova
+
+WORKDIR /app
+
+COPY --from=builder /build/target/release/nova-node /app/nova-node
+
+# Data directory for chain state, keys, etc.
+RUN mkdir -p /data && chown nova:nova /data
+VOLUME ["/data"]
+
+USER nova
+
+# RPC (JSON-RPC / REST)
+EXPOSE 8080
+# P2P gossip
+EXPOSE 9090
+# Prometheus metrics
+EXPOSE 9100
+
+ENV NOVA_DATA_DIR=/data \
+    NOVA_RPC_ADDR=0.0.0.0:8080 \
+    NOVA_P2P_ADDR=0.0.0.0:9090 \
+    NOVA_METRICS_ADDR=0.0.0.0:9100 \
+    RUST_LOG=info
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -sf http://localhost:8080/health || exit 1
+
+ENTRYPOINT ["/app/nova-node"]
+CMD ["--data-dir", "/data"]

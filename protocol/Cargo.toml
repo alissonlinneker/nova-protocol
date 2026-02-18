@@ -1,0 +1,65 @@
+[package]
+name = "nova-protocol"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Core protocol library for NOVA — the open payment protocol"
+
+[dependencies]
+tokio = { workspace = true }
+ed25519-dalek = { workspace = true }
+curve25519-dalek = { workspace = true }
+x25519-dalek = { workspace = true }
+rand = { workspace = true }
+rand_core = { workspace = true }
+sha2 = { workspace = true }
+blake3 = { workspace = true }
+aes-gcm = { workspace = true }
+ark-ff = { workspace = true }
+ark-ec = { workspace = true }
+ark-bn254 = { workspace = true }
+ark-groth16 = { workspace = true }
+ark-snark = { workspace = true }
+ark-relations = { workspace = true }
+ark-r1cs-std = { workspace = true }
+ark-std = { workspace = true }
+ark-serialize = { workspace = true }
+ark-crypto-primitives = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bincode = { workspace = true }
+hex = { workspace = true }
+bs58 = { workspace = true }
+bech32 = { workspace = true }
+libp2p = { workspace = true }
+rocksdb = { workspace = true }
+axum = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+prometheus = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
+async-trait = { workspace = true }
+parking_lot = { workspace = true }
+dashmap = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
+
+[[bench]]
+name = "signing_bench"
+harness = false
+
+[[bench]]
+name = "zkp_bench"
+harness = false
+
+[[bench]]
+name = "consensus_bench"
+harness = false

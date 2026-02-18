@@ -1,0 +1,196 @@
+# =============================================================================
+# NOVA Protocol — Local Development Environment
+# Spins up a 4-validator devnet, API gateway, and block explorer.
+#
+# Usage:
+#   docker compose -f docker/docker-compose.yml up -d
+#   docker compose -f docker/docker-compose.yml logs -f
+#   docker compose -f docker/docker-compose.yml down -v   # wipe data
+# =============================================================================
+
+x-node-defaults: &node-defaults
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile.node
+  restart: unless-stopped
+  networks:
+    - nova-network
+  healthcheck:
+    test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+    interval: 15s
+    timeout: 5s
+    start_period: 30s
+    retries: 3
+
+services:
+  # --------------------------------------------------------------------------
+  # Validator Nodes
+  # --------------------------------------------------------------------------
+  nova-node-1:
+    <<: *node-defaults
+    container_name: nova-node-1
+    hostname: nova-node-1
+    ports:
+      - "8080:8080"   # RPC
+      - "9090:9090"   # P2P
+      - "9100:9100"   # Metrics
+    volumes:
+      - nova-node-1-data:/data
+    environment:
+      NOVA_NODE_ID: "node-1"
+      NOVA_P2P_ADDR: "0.0.0.0:9090"
+      NOVA_RPC_ADDR: "0.0.0.0:8080"
+      NOVA_METRICS_ADDR: "0.0.0.0:9100"
+      NOVA_VALIDATORS: "nova-node-1:9090,nova-node-2:9090,nova-node-3:9090,nova-node-4:9090"
+      NOVA_GENESIS_PATH: "/data/genesis.json"
+      NOVA_LOG_LEVEL: "debug"
+      RUST_LOG: "debug"
+
+  nova-node-2:
+    <<: *node-defaults
+    container_name: nova-node-2
+    hostname: nova-node-2
+    ports:
+      - "8081:8080"
+      - "9091:9090"
+      - "9101:9100"
+    volumes:
+      - nova-node-2-data:/data
+    environment:
+      NOVA_NODE_ID: "node-2"
+      NOVA_P2P_ADDR: "0.0.0.0:9090"
+      NOVA_RPC_ADDR: "0.0.0.0:8080"
+      NOVA_METRICS_ADDR: "0.0.0.0:9100"
+      NOVA_VALIDATORS: "nova-node-1:9090,nova-node-2:9090,nova-node-3:9090,nova-node-4:9090"
+      NOVA_GENESIS_PATH: "/data/genesis.json"
+      NOVA_BOOT_NODES: "nova-node-1:9090"
+      NOVA_LOG_LEVEL: "debug"
+      RUST_LOG: "debug"
+
+  nova-node-3:
+    <<: *node-defaults
+    container_name: nova-node-3
+    hostname: nova-node-3
+    ports:
+      - "8082:8080"
+      - "9092:9090"
+      - "9102:9100"
+    volumes:
+      - nova-node-3-data:/data
+    environment:
+      NOVA_NODE_ID: "node-3"
+      NOVA_P2P_ADDR: "0.0.0.0:9090"
+      NOVA_RPC_ADDR: "0.0.0.0:8080"
+      NOVA_METRICS_ADDR: "0.0.0.0:9100"
+      NOVA_VALIDATORS: "nova-node-1:9090,nova-node-2:9090,nova-node-3:9090,nova-node-4:9090"
+      NOVA_GENESIS_PATH: "/data/genesis.json"
+      NOVA_BOOT_NODES: "nova-node-1:9090"
+      NOVA_LOG_LEVEL: "debug"
+      RUST_LOG: "debug"
+
+  nova-node-4:
+    <<: *node-defaults
+    container_name: nova-node-4
+    hostname: nova-node-4
+    ports:
+      - "8083:8080"
+      - "9093:9090"
+      - "9103:9100"
+    volumes:
+      - nova-node-4-data:/data
+    environment:
+      NOVA_NODE_ID: "node-4"
+      NOVA_P2P_ADDR: "0.0.0.0:9090"
+      NOVA_RPC_ADDR: "0.0.0.0:8080"
+      NOVA_METRICS_ADDR: "0.0.0.0:9100"
+      NOVA_VALIDATORS: "nova-node-1:9090,nova-node-2:9090,nova-node-3:9090,nova-node-4:9090"
+      NOVA_GENESIS_PATH: "/data/genesis.json"
+      NOVA_BOOT_NODES: "nova-node-1:9090"
+      NOVA_LOG_LEVEL: "debug"
+      RUST_LOG: "debug"
+
+  # --------------------------------------------------------------------------
+  # API Gateway
+  # --------------------------------------------------------------------------
+  nova-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: nova-api
+    hostname: nova-api
+    restart: unless-stopped
+    ports:
+      - "8090:8080"   # Public API
+      - "9110:9100"   # Metrics
+    volumes:
+      - nova-api-data:/data
+    environment:
+      NOVA_MODE: "api"
+      NOVA_RPC_ADDR: "0.0.0.0:8080"
+      NOVA_METRICS_ADDR: "0.0.0.0:9100"
+      NOVA_UPSTREAM_NODES: "nova-node-1:8080,nova-node-2:8080,nova-node-3:8080,nova-node-4:8080"
+      NOVA_LOG_LEVEL: "info"
+      RUST_LOG: "info"
+    networks:
+      - nova-network
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    depends_on:
+      nova-node-1:
+        condition: service_healthy
+      nova-node-2:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # Block Explorer
+  # --------------------------------------------------------------------------
+  nova-explorer:
+    image: node:20-slim
+    container_name: nova-explorer
+    hostname: nova-explorer
+    restart: unless-stopped
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../apps/explorer:/app
+    environment:
+      NODE_ENV: "development"
+      PORT: "3000"
+      NOVA_API_URL: "http://nova-api:8080"
+    command: ["sh", "-c", "npm install --prefer-offline && npm run dev -- --host 0.0.0.0 --port 3000"]
+    networks:
+      - nova-network
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/"]
+      interval: 15s
+      timeout: 5s
+      start_period: 45s
+      retries: 5
+    depends_on:
+      nova-api:
+        condition: service_healthy
+
+# -----------------------------------------------------------------------------
+# Networks
+# -----------------------------------------------------------------------------
+networks:
+  nova-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# -----------------------------------------------------------------------------
+# Volumes
+# -----------------------------------------------------------------------------
+volumes:
+  nova-node-1-data:
+  nova-node-2-data:
+  nova-node-3-data:
+  nova-node-4-data:
+  nova-api-data:

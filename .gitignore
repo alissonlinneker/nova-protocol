@@ -1,0 +1,66 @@
+# Internal documentation (not for public repo)
+docs/
+
+# Rust
+target/
+**/*.rs.bk
+*.pdb
+
+# Node / TypeScript
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+*.egg
+.venv/
+venv/
+
+# Environment
+.env
+.env.*
+.env.local
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace
+
+# Secrets / Keys
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Docker
+docker-compose.override.yml
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+lcov.info
+tarpaulin-report.html
+
+# Benchmarks (regenerated on demand)
+benchmark-results/
+
+# Local development notes (not for public repo)
+DEV_NOTES.md
