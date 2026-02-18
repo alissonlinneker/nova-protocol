@@ -1,20 +1,76 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useMerchantStore } from "../hooks/useMerchant";
 import QRGenerator from "./QRGenerator";
 
 type TerminalState = "input" | "waiting" | "confirmed";
 
+const PAYMENT_TIMEOUT_MS = 5 * 60 * 1_000; // 5 minutes
+const POLL_INTERVAL_MS = 3_000;
+
 export default function Terminal() {
-  const { address, pendingAmount, setPendingAmount, simulatePayment } =
-    useMerchantStore();
+  const {
+    address,
+    pendingAmount,
+    setPendingAmount,
+    activePayment,
+    createPaymentRequest,
+    cancelPayment,
+    expirePayment,
+    pollForPayment,
+    fetchBalance,
+  } = useMerchantStore();
+
   const [state, setState] = useState<TerminalState>("input");
-  const [confirmedTx, setConfirmedTx] = useState<{
-    hash: string;
-    amount: number;
-    from: string;
-  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync terminal state with store's active payment on mount
+  useEffect(() => {
+    if (activePayment) {
+      if (activePayment.status === "confirmed") {
+        setState("confirmed");
+      } else if (activePayment.status === "pending") {
+        setState("waiting");
+      }
+    }
+  }, []);
+
+  const cleanup = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => cleanup, [cleanup]);
+
+  const startPaymentPolling = useCallback(() => {
+    // Poll the node for balance changes that indicate payment received
+    pollRef.current = setInterval(async () => {
+      const detected = await pollForPayment();
+      if (detected) {
+        cleanup();
+        setState("confirmed");
+      }
+    }, POLL_INTERVAL_MS);
+
+    // Set expiration timeout
+    timeoutRef.current = setTimeout(() => {
+      cleanup();
+      expirePayment();
+      setError("Payment request expired. No payment was detected.");
+      setState("input");
+    }, PAYMENT_TIMEOUT_MS);
+  }, [pollForPayment, expirePayment, cleanup]);
 
   const handleNumpad = (value: string) => {
+    setError(null);
     if (value === "clear") {
       setPendingAmount("");
       return;
@@ -29,26 +85,35 @@ export default function Terminal() {
   };
 
   const handleCharge = async () => {
-    if (!pendingAmount || parseFloat(pendingAmount) <= 0) return;
-    setState("waiting");
+    const amount = parseFloat(pendingAmount);
+    if (!pendingAmount || isNaN(amount) || amount <= 0) return;
+
+    setError(null);
 
     try {
-      const tx = await simulatePayment();
-      setConfirmedTx({
-        hash: tx.hash,
-        amount: tx.amount,
-        from: tx.from,
-      });
-      setState("confirmed");
-    } catch {
-      setState("input");
+      // Snapshot the current balance before creating the payment request
+      await fetchBalance();
+      createPaymentRequest();
+      setState("waiting");
+      startPaymentPolling();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create payment request");
     }
   };
 
-  const handleNewCharge = () => {
+  const handleCancel = () => {
+    cleanup();
+    cancelPayment();
+    setError(null);
     setState("input");
-    setConfirmedTx(null);
+  };
+
+  const handleNewCharge = () => {
+    cleanup();
+    cancelPayment();
     setPendingAmount("");
+    setError(null);
+    setState("input");
   };
 
   const displayAmount = pendingAmount || "0";
@@ -64,6 +129,11 @@ export default function Terminal() {
     ".", "0", "backspace",
   ];
 
+  // Build QR payload: nova:<address>?amount=<amount>
+  const qrPayload = activePayment
+    ? `nova:${activePayment.address}?amount=${activePayment.amount}`
+    : "";
+
   return (
     <div className="nova-card">
       {/* Input State */}
@@ -74,13 +144,18 @@ export default function Terminal() {
               Amount to Charge
             </p>
             <div className="flex items-baseline justify-center gap-1">
-              <span className="text-2xl text-gray-500 font-light">$</span>
               <span className="text-5xl font-bold text-white tracking-tight">
                 {pendingAmount ? formattedAmount : "0"}
               </span>
-              <span className="text-lg text-gray-500 ml-1">USDN</span>
+              <span className="text-lg text-gray-500 ml-1">NOVA</span>
             </div>
           </div>
+
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400 text-center">
+              {error}
+            </div>
+          )}
 
           {/* Numpad */}
           <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
@@ -126,25 +201,35 @@ export default function Terminal() {
       )}
 
       {/* Waiting State */}
-      {state === "waiting" && (
+      {state === "waiting" && activePayment && (
         <div className="flex flex-col items-center py-8 space-y-6">
           <div className="text-center mb-2">
             <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">
               Payment Requested
             </p>
             <p className="text-3xl font-bold text-white">
-              ${parseFloat(pendingAmount).toLocaleString("en-US", {
+              {activePayment.amount.toLocaleString("en-US", {
                 minimumFractionDigits: 2,
               })}
-              <span className="text-base text-gray-500 ml-1">USDN</span>
+              <span className="text-base text-gray-500 ml-1">NOVA</span>
             </p>
           </div>
 
           <QRGenerator
-            data={`nova:${address}?amount=${pendingAmount}&token=USDN`}
+            data={qrPayload}
             size={220}
             label="Scan to pay with NOVA Wallet"
           />
+
+          {/* Destination address */}
+          <div className="w-full bg-gray-800/50 rounded-xl px-4 py-3">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">
+              Send to
+            </p>
+            <code className="text-xs font-mono text-gray-300 break-all">
+              {address}
+            </code>
+          </div>
 
           {/* Waiting animation */}
           <div className="flex items-center gap-3">
@@ -157,7 +242,7 @@ export default function Terminal() {
           </div>
 
           <button
-            onClick={handleNewCharge}
+            onClick={handleCancel}
             className="nova-btn-secondary px-6"
           >
             Cancel
@@ -166,7 +251,7 @@ export default function Terminal() {
       )}
 
       {/* Confirmed State */}
-      {state === "confirmed" && confirmedTx && (
+      {state === "confirmed" && activePayment && (
         <div className="flex flex-col items-center py-8 space-y-6">
           {/* Success animation */}
           <div className="relative">
@@ -189,24 +274,37 @@ export default function Terminal() {
               Payment Confirmed
             </h3>
             <p className="text-3xl font-bold text-white mt-2">
-              ${confirmedTx.amount.toLocaleString("en-US", {
+              {activePayment.amount.toLocaleString("en-US", {
                 minimumFractionDigits: 2,
               })}
+              <span className="text-base text-gray-500 ml-1">NOVA</span>
             </p>
           </div>
 
           <div className="w-full bg-gray-800/50 rounded-xl p-4 space-y-2">
+            {activePayment.sender && (
+              <div className="flex justify-between">
+                <span className="text-xs text-gray-500">From</span>
+                <code className="text-xs font-mono text-gray-300">
+                  {activePayment.sender.length > 20
+                    ? `${activePayment.sender.slice(0, 12)}...${activePayment.sender.slice(-6)}`
+                    : activePayment.sender}
+                </code>
+              </div>
+            )}
+            {activePayment.txHash && (
+              <div className="flex justify-between">
+                <span className="text-xs text-gray-500">Hash</span>
+                <code className="text-xs font-mono text-gray-300">
+                  {activePayment.txHash.slice(0, 12)}...{activePayment.txHash.slice(-6)}
+                </code>
+              </div>
+            )}
             <div className="flex justify-between">
-              <span className="text-xs text-gray-500">From</span>
-              <code className="text-xs font-mono text-gray-300">
-                {confirmedTx.from.slice(0, 12)}...{confirmedTx.from.slice(-6)}
-              </code>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-xs text-gray-500">Hash</span>
-              <code className="text-xs font-mono text-gray-300">
-                {confirmedTx.hash.slice(0, 12)}...{confirmedTx.hash.slice(-6)}
-              </code>
+              <span className="text-xs text-gray-500">Time</span>
+              <span className="text-xs text-gray-300">
+                {new Date().toLocaleTimeString()}
+              </span>
             </div>
           </div>
 

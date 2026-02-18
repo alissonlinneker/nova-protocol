@@ -1,52 +1,53 @@
-import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
-import { useWallet } from "../hooks/useWallet";
-import type { Transaction } from "../stores/walletStore";
+import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { useWallet } from '../hooks/useWallet';
+import type { Transaction } from '../stores/walletStore';
 
-type FilterType = "all" | "send" | "receive" | "credit_issued" | "credit_repay";
-type FilterStatus = "all" | "pending" | "confirmed" | "failed";
+type FilterType = 'all' | 'send' | 'receive' | 'credit_issued' | 'credit_repay';
+type FilterStatus = 'all' | 'pending' | 'confirmed' | 'failed';
 
 function formatDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+  return new Date(timestamp).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 }
 
 function truncateHash(hash: string): string {
+  if (hash.length <= 18) return hash;
   return `${hash.slice(0, 10)}...${hash.slice(-8)}`;
 }
 
 export default function TransactionHistory() {
   const { transactions, address } = useWallet();
 
-  const [typeFilter, setTypeFilter] = useState<FilterType>("all");
-  const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
+  const [typeFilter, setTypeFilter] = useState<FilterType>('all');
+  const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
 
   const filteredTransactions = useMemo(() => {
     return transactions
-      .filter((tx) => typeFilter === "all" || tx.type === typeFilter)
-      .filter((tx) => statusFilter === "all" || tx.status === statusFilter)
+      .filter((tx) => typeFilter === 'all' || tx.type === typeFilter)
+      .filter((tx) => statusFilter === 'all' || tx.status === statusFilter)
       .sort((a, b) => b.timestamp - a.timestamp);
   }, [transactions, typeFilter, statusFilter]);
 
   const typeLabels: Record<FilterType, string> = {
-    all: "All",
-    send: "Sent",
-    receive: "Received",
-    credit_issued: "Credit",
-    credit_repay: "Repay",
+    all: 'All',
+    send: 'Sent',
+    receive: 'Received',
+    credit_issued: 'Credit',
+    credit_repay: 'Repay',
   };
 
   const statusLabels: Record<FilterStatus, string> = {
-    all: "All Status",
-    pending: "Pending",
-    confirmed: "Confirmed",
-    failed: "Failed",
+    all: 'All Status',
+    pending: 'Pending',
+    confirmed: 'Confirmed',
+    failed: 'Failed',
   };
 
   return (
@@ -74,8 +75,8 @@ export default function TransactionHistory() {
               onClick={() => setTypeFilter(type)}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
                 typeFilter === type
-                  ? "bg-nova-600 text-white"
-                  : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                  ? 'bg-nova-600 text-white'
+                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
               }`}
             >
               {typeLabels[type]}
@@ -91,8 +92,8 @@ export default function TransactionHistory() {
               onClick={() => setStatusFilter(status)}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
                 statusFilter === status
-                  ? "bg-gray-700 text-white"
-                  : "bg-gray-800/50 text-gray-500 hover:bg-gray-800"
+                  ? 'bg-gray-700 text-white'
+                  : 'bg-gray-800/50 text-gray-500 hover:bg-gray-800'
               }`}
             >
               {statusLabels[status]}
@@ -103,7 +104,7 @@ export default function TransactionHistory() {
 
       {/* Results count */}
       <p className="text-xs text-gray-500">
-        {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? "s" : ""}
+        {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''}
       </p>
 
       {/* Transaction List */}
@@ -122,20 +123,20 @@ export default function TransactionHistory() {
               onClick={() => setSelectedTx(selectedTx?.id === tx.id ? null : tx)}
               className={`nova-card cursor-pointer transition-all ${
                 selectedTx?.id === tx.id
-                  ? "border-nova-500/50 ring-1 ring-nova-500/20"
-                  : "hover:border-gray-700"
+                  ? 'border-nova-500/50 ring-1 ring-nova-500/20'
+                  : 'hover:border-gray-700'
               }`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div
                     className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-                      tx.type === "receive" || tx.type === "credit_issued"
-                        ? "bg-emerald-500/20"
-                        : "bg-red-500/20"
+                      tx.type === 'receive' || tx.type === 'credit_issued'
+                        ? 'bg-emerald-500/20'
+                        : 'bg-red-500/20'
                     }`}
                   >
-                    {tx.type === "receive" || tx.type === "credit_issued" ? (
+                    {tx.type === 'receive' || tx.type === 'credit_issued' ? (
                       <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
                       </svg>
@@ -147,10 +148,10 @@ export default function TransactionHistory() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-white capitalize">
-                      {tx.type === "credit_issued"
-                        ? "Credit Issued"
-                        : tx.type === "credit_repay"
-                        ? "Credit Repayment"
+                      {tx.type === 'credit_issued'
+                        ? 'Credit Issued'
+                        : tx.type === 'credit_repay'
+                        ? 'Credit Repayment'
                         : tx.type}
                     </p>
                     <p className="text-xs text-gray-500">{formatDate(tx.timestamp)}</p>
@@ -159,21 +160,21 @@ export default function TransactionHistory() {
                 <div className="text-right">
                   <p
                     className={`text-sm font-semibold ${
-                      tx.type === "receive" || tx.type === "credit_issued"
-                        ? "text-emerald-400"
-                        : "text-white"
+                      tx.type === 'receive' || tx.type === 'credit_issued'
+                        ? 'text-emerald-400'
+                        : 'text-white'
                     }`}
                   >
-                    {tx.type === "receive" || tx.type === "credit_issued" ? "+" : "-"}
-                    {tx.amount.toLocaleString()} {tx.symbol}
+                    {tx.type === 'receive' || tx.type === 'credit_issued' ? '+' : '-'}
+                    {tx.amount.toLocaleString(undefined, { maximumFractionDigits: 8 })} {tx.symbol}
                   </p>
                   <span
                     className={`nova-badge text-[10px] ${
-                      tx.status === "confirmed"
-                        ? "bg-emerald-500/10 text-emerald-400"
-                        : tx.status === "pending"
-                        ? "bg-amber-500/10 text-amber-400"
-                        : "bg-red-500/10 text-red-400"
+                      tx.status === 'confirmed'
+                        ? 'bg-emerald-500/10 text-emerald-400'
+                        : tx.status === 'pending'
+                        ? 'bg-amber-500/10 text-amber-400'
+                        : 'bg-red-500/10 text-red-400'
                     }`}
                   >
                     {tx.status}
@@ -186,20 +187,20 @@ export default function TransactionHistory() {
                 <div className="mt-4 pt-4 border-t border-gray-800 space-y-2.5">
                   <div className="flex justify-between">
                     <span className="text-xs text-gray-500">Hash</span>
-                    <code className="text-xs font-mono text-gray-300">
+                    <code className="text-xs font-mono text-gray-300 select-all">
                       {truncateHash(tx.hash)}
                     </code>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-xs text-gray-500">From</span>
                     <code className="text-xs font-mono text-gray-300">
-                      {tx.from === address ? "You" : truncateHash(tx.from)}
+                      {tx.from === address ? 'You' : truncateHash(tx.from)}
                     </code>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-xs text-gray-500">To</span>
                     <code className="text-xs font-mono text-gray-300">
-                      {tx.to === address ? "You" : truncateHash(tx.to)}
+                      {tx.to === address ? 'You' : truncateHash(tx.to)}
                     </code>
                   </div>
                   <div className="flex justify-between">

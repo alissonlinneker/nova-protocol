@@ -1,17 +1,17 @@
-import { Link } from "react-router-dom";
-import { useWallet } from "../hooks/useWallet";
-import IdentityCard from "./IdentityCard";
+import { Link } from 'react-router-dom';
+import { useWallet } from '../hooks/useWallet';
+import { useNova } from '../hooks/useNova';
+import IdentityCard from './IdentityCard';
 
-function formatUsd(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
+function formatNova(value: number): string {
+  return new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 2,
+    maximumFractionDigits: 8,
   }).format(value);
 }
 
 function formatNumber(value: number): string {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
@@ -29,22 +29,52 @@ function timeAgo(timestamp: number): string {
 }
 
 export default function Dashboard() {
-  const { balances, totalUsdBalance, recentTransactions } = useWallet();
+  const { balances, recentTransactions } = useWallet();
+  const { isNodeConnected, blockHeight, isLoadingBalance } = useNova();
+
+  const totalBalance = balances.reduce((acc, b) => acc + b.balance, 0);
 
   return (
     <div className="space-y-6">
       {/* Identity Card */}
       <IdentityCard />
 
+      {/* Network Status */}
+      <div className="nova-card flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span
+            className={`w-2 h-2 rounded-full ${
+              isNodeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'
+            }`}
+          />
+          <span className={`text-xs font-medium ${isNodeConnected ? 'text-emerald-400' : 'text-red-400'}`}>
+            {isNodeConnected ? 'Connected' : 'Disconnected'}
+          </span>
+        </div>
+        {blockHeight !== null && (
+          <span className="text-xs text-gray-500 font-mono">
+            Block #{blockHeight.toLocaleString()}
+          </span>
+        )}
+      </div>
+
       {/* Total Balance */}
       <div className="nova-card text-center">
         <p className="text-sm text-gray-400 mb-1">Total Balance</p>
-        <h2 className="text-4xl font-bold text-white tracking-tight">
-          {formatUsd(totalUsdBalance)}
-        </h2>
-        <p className="text-sm text-emerald-400 mt-1.5 font-medium">
-          +$1,247.50 (2.3%) today
-        </p>
+        {isLoadingBalance ? (
+          <div className="flex items-center justify-center py-2">
+            <div className="w-6 h-6 border-2 border-nova-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <h2 className="text-4xl font-bold text-white tracking-tight">
+            {formatNova(totalBalance)} <span className="text-lg text-gray-400">NOVA</span>
+          </h2>
+        )}
+        {!isNodeConnected && balances.length === 0 && (
+          <p className="text-xs text-gray-500 mt-2">
+            Connect to a node to fetch your balance
+          </p>
+        )}
       </div>
 
       {/* Quick Actions */}
@@ -87,44 +117,38 @@ export default function Dashboard() {
       </div>
 
       {/* Token Balances */}
-      <div className="nova-card">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
-          Assets
-        </h3>
-        <div className="space-y-3">
-          {balances.map((token) => (
-            <div
-              key={token.symbol}
-              className="flex items-center justify-between py-3 px-3 rounded-xl hover:bg-gray-800/50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-nova-500 to-accent-500 flex items-center justify-center text-xs font-bold text-white">
-                  {token.symbol.slice(0, 2)}
+      {balances.length > 0 && (
+        <div className="nova-card">
+          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
+            Assets
+          </h3>
+          <div className="space-y-3">
+            {balances.map((token) => (
+              <div
+                key={token.symbol}
+                className="flex items-center justify-between py-3 px-3 rounded-xl hover:bg-gray-800/50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-nova-500 to-accent-500 flex items-center justify-center text-xs font-bold text-white">
+                    {token.symbol.slice(0, 2)}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-white">{token.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {formatNumber(token.balance)} {token.symbol}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-white">{token.name}</p>
-                  <p className="text-xs text-gray-500">
+                <div className="text-right">
+                  <p className="text-sm font-medium text-white">
                     {formatNumber(token.balance)} {token.symbol}
                   </p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-sm font-medium text-white">
-                  {formatUsd(token.usdValue)}
-                </p>
-                <p
-                  className={`text-xs font-medium ${
-                    token.change24h >= 0 ? "text-emerald-400" : "text-red-400"
-                  }`}
-                >
-                  {token.change24h >= 0 ? "+" : ""}
-                  {token.change24h.toFixed(2)}%
-                </p>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Recent Transactions */}
       <div className="nova-card">
@@ -139,67 +163,79 @@ export default function Dashboard() {
             View All
           </Link>
         </div>
-        <div className="space-y-2">
-          {recentTransactions.slice(0, 5).map((tx) => (
-            <div
-              key={tx.id}
-              className="flex items-center justify-between py-3 px-3 rounded-xl hover:bg-gray-800/50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-9 h-9 rounded-full flex items-center justify-center ${
-                    tx.type === "receive" || tx.type === "credit_issued"
-                      ? "bg-emerald-500/20"
-                      : "bg-red-500/20"
-                  }`}
-                >
-                  {tx.type === "receive" || tx.type === "credit_issued" ? (
-                    <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
-                    </svg>
-                  )}
+        {recentTransactions.length === 0 ? (
+          <div className="text-center py-8">
+            <svg className="w-10 h-10 text-gray-700 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+            </svg>
+            <p className="text-sm text-gray-500">No transactions yet</p>
+            <p className="text-xs text-gray-600 mt-1">
+              Send or receive NOVA to see your history
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {recentTransactions.slice(0, 5).map((tx) => (
+              <div
+                key={tx.id}
+                className="flex items-center justify-between py-3 px-3 rounded-xl hover:bg-gray-800/50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center ${
+                      tx.type === 'receive' || tx.type === 'credit_issued'
+                        ? 'bg-emerald-500/20'
+                        : 'bg-red-500/20'
+                    }`}
+                  >
+                    {tx.type === 'receive' || tx.type === 'credit_issued' ? (
+                      <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
+                      </svg>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-white capitalize">
+                      {tx.type === 'credit_issued'
+                        ? 'Credit Issued'
+                        : tx.type === 'credit_repay'
+                        ? 'Credit Repay'
+                        : tx.type}
+                    </p>
+                    <p className="text-xs text-gray-500">{timeAgo(tx.timestamp)}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-white capitalize">
-                    {tx.type === "credit_issued"
-                      ? "Credit Issued"
-                      : tx.type === "credit_repay"
-                      ? "Credit Repay"
-                      : tx.type}
+                <div className="text-right">
+                  <p
+                    className={`text-sm font-medium ${
+                      tx.type === 'receive' || tx.type === 'credit_issued'
+                        ? 'text-emerald-400'
+                        : 'text-white'
+                    }`}
+                  >
+                    {tx.type === 'receive' || tx.type === 'credit_issued' ? '+' : '-'}
+                    {formatNumber(tx.amount)} {tx.symbol}
                   </p>
-                  <p className="text-xs text-gray-500">{timeAgo(tx.timestamp)}</p>
+                  <span
+                    className={`nova-badge text-[10px] ${
+                      tx.status === 'confirmed'
+                        ? 'bg-emerald-500/10 text-emerald-400'
+                        : tx.status === 'pending'
+                        ? 'bg-amber-500/10 text-amber-400'
+                        : 'bg-red-500/10 text-red-400'
+                    }`}
+                  >
+                    {tx.status}
+                  </span>
                 </div>
               </div>
-              <div className="text-right">
-                <p
-                  className={`text-sm font-medium ${
-                    tx.type === "receive" || tx.type === "credit_issued"
-                      ? "text-emerald-400"
-                      : "text-white"
-                  }`}
-                >
-                  {tx.type === "receive" || tx.type === "credit_issued" ? "+" : "-"}
-                  {formatNumber(tx.amount)} {tx.symbol}
-                </p>
-                <span
-                  className={`nova-badge text-[10px] ${
-                    tx.status === "confirmed"
-                      ? "bg-emerald-500/10 text-emerald-400"
-                      : tx.status === "pending"
-                      ? "bg-amber-500/10 text-amber-400"
-                      : "bg-red-500/10 text-red-400"
-                  }`}
-                >
-                  {tx.status}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

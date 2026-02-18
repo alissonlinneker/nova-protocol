@@ -1,12 +1,105 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { useWallet } from "../hooks/useWallet";
+import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { useWallet } from '../hooks/useWallet';
+
+/**
+ * Minimal QR code SVG generator.
+ *
+ * Uses a deterministic bit matrix derived from the input data to produce
+ * a visual QR-like pattern. This is a simplified approach that creates a
+ * recognizable visual representation. For production scanning support,
+ * integrate a full QR encoder library.
+ */
+function generateQrMatrix(data: string, size: number): boolean[][] {
+  // Simple hash-based matrix generation for visual representation.
+  // Deterministic: same data always produces the same pattern.
+  const matrix: boolean[][] = Array.from({ length: size }, () =>
+    Array.from({ length: size }, () => false),
+  );
+
+  // Finder patterns (3 corners)
+  const finderSize = 7;
+  const drawFinder = (startRow: number, startCol: number) => {
+    for (let r = 0; r < finderSize; r++) {
+      for (let c = 0; c < finderSize; c++) {
+        const isOuter = r === 0 || r === finderSize - 1 || c === 0 || c === finderSize - 1;
+        const isInner = r >= 2 && r <= 4 && c >= 2 && c <= 4;
+        if (isOuter || isInner) {
+          const mr = startRow + r;
+          const mc = startCol + c;
+          if (mr < size && mc < size) {
+            matrix[mr]![mc] = true;
+          }
+        }
+      }
+    }
+  };
+
+  drawFinder(0, 0);
+  drawFinder(0, size - finderSize);
+  drawFinder(size - finderSize, 0);
+
+  // Timing patterns
+  for (let i = finderSize; i < size - finderSize; i++) {
+    matrix[6]![i] = i % 2 === 0;
+    matrix[i]![6] = i % 2 === 0;
+  }
+
+  // Data region - hash-based deterministic fill
+  let hash = 0;
+  for (let i = 0; i < data.length; i++) {
+    hash = ((hash << 5) - hash + data.charCodeAt(i)) | 0;
+  }
+
+  for (let r = 8; r < size - 8; r++) {
+    for (let c = 8; c < size - 8; c++) {
+      if (r === 6 || c === 6) continue;
+      // Deterministic pseudo-random based on position and data hash
+      const seed = ((r * 31 + c * 17 + hash) * 2654435761) >>> 0;
+      matrix[r]![c] = seed % 3 !== 0;
+    }
+  }
+
+  return matrix;
+}
+
+function QrCode({ data, cellSize = 4 }: { data: string; cellSize?: number }) {
+  const size = 29; // Standard QR module count for medium data
+  const matrix = useMemo(() => generateQrMatrix(data, size), [data]);
+  const svgSize = size * cellSize;
+
+  return (
+    <svg
+      width={svgSize}
+      height={svgSize}
+      viewBox={`0 0 ${svgSize} ${svgSize}`}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect width={svgSize} height={svgSize} fill="white" />
+      {matrix.map((row, r) =>
+        row.map(
+          (cell, c) =>
+            cell && (
+              <rect
+                key={`${r}-${c}`}
+                x={c * cellSize}
+                y={r * cellSize}
+                width={cellSize}
+                height={cellSize}
+                fill="#1a1a2e"
+              />
+            ),
+        ),
+      )}
+    </svg>
+  );
+}
 
 export default function ReceivePayment() {
   const { address, truncatedAddress } = useWallet();
   const [copied, setCopied] = useState(false);
-  const [requestAmount, setRequestAmount] = useState("");
-  const [requestSymbol, setRequestSymbol] = useState("NOVA");
+  const [requestAmount, setRequestAmount] = useState('');
+  const [requestSymbol, setRequestSymbol] = useState('NOVA');
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(address);
@@ -33,42 +126,10 @@ export default function ReceivePayment() {
         <h1 className="text-xl font-bold text-white">Receive Payment</h1>
       </div>
 
-      {/* QR Code Placeholder */}
+      {/* QR Code */}
       <div className="nova-card flex flex-col items-center py-8">
-        <div className="w-52 h-52 bg-white rounded-2xl flex items-center justify-center mb-6 p-4">
-          {/* QR Code placeholder - renders a visual grid pattern */}
-          <div className="w-full h-full relative">
-            <div className="absolute inset-0 grid grid-cols-11 grid-rows-11 gap-[2px]">
-              {Array.from({ length: 121 }).map((_, i) => {
-                const row = Math.floor(i / 11);
-                const col = i % 11;
-                // Create a deterministic QR-like pattern
-                const isCornerModule =
-                  (row < 3 && col < 3) ||
-                  (row < 3 && col > 7) ||
-                  (row > 7 && col < 3);
-                const isData =
-                  (row + col) % 3 === 0 ||
-                  (row * col) % 2 === 0;
-                const isFilled = isCornerModule || (row > 2 && col > 2 && isData);
-
-                return (
-                  <div
-                    key={i}
-                    className={`rounded-[1px] ${
-                      isFilled ? "bg-gray-900" : "bg-white"
-                    }`}
-                  />
-                );
-              })}
-            </div>
-            {/* Center NOVA logo */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-nova-600 to-accent-500 flex items-center justify-center shadow-lg">
-                <span className="text-[10px] font-bold text-white">N</span>
-              </div>
-            </div>
-          </div>
+        <div className="bg-white rounded-2xl p-4 mb-6">
+          <QrCode data={paymentUri} cellSize={4} />
         </div>
 
         <p className="text-xs text-gray-500 mb-4">
@@ -103,6 +164,18 @@ export default function ReceivePayment() {
         )}
       </div>
 
+      {/* Full Address */}
+      <div className="nova-card">
+        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
+          Full Address
+        </h3>
+        <div className="bg-gray-800/50 rounded-xl p-3">
+          <p className="text-xs font-mono text-gray-300 break-all select-all">
+            {address}
+          </p>
+        </div>
+      </div>
+
       {/* Request Amount */}
       <div className="nova-card">
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
@@ -115,7 +188,7 @@ export default function ReceivePayment() {
             onChange={(e) => setRequestAmount(e.target.value)}
             placeholder="0.00"
             min="0"
-            step="0.01"
+            step="0.00000001"
             className="nova-input flex-1"
           />
           <select
@@ -124,9 +197,6 @@ export default function ReceivePayment() {
             className="nova-input w-28"
           >
             <option value="NOVA">NOVA</option>
-            <option value="USDN">USDN</option>
-            <option value="stNOVA">stNOVA</option>
-            <option value="CRED">CRED</option>
           </select>
         </div>
 
@@ -135,7 +205,7 @@ export default function ReceivePayment() {
             <label className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
               Payment URI
             </label>
-            <p className="text-xs font-mono text-gray-400 mt-1 break-all">
+            <p className="text-xs font-mono text-gray-400 mt-1 break-all select-all">
               {paymentUri}
             </p>
           </div>
@@ -144,7 +214,24 @@ export default function ReceivePayment() {
 
       {/* Share Options */}
       <div className="grid grid-cols-2 gap-3">
-        <button className="nova-btn-secondary flex items-center justify-center gap-2">
+        <button
+          onClick={async () => {
+            if (navigator.share) {
+              try {
+                await navigator.share({
+                  title: 'NOVA Payment Address',
+                  text: `Send NOVA to: ${address}`,
+                  url: paymentUri,
+                });
+              } catch {
+                // User cancelled or share not supported
+              }
+            } else {
+              await navigator.clipboard.writeText(paymentUri);
+            }
+          }}
+          className="nova-btn-secondary flex items-center justify-center gap-2"
+        >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
           </svg>

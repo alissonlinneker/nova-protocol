@@ -19,6 +19,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_TOOLCHAIN: "1.75"
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -31,7 +32,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
@@ -49,7 +52,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked

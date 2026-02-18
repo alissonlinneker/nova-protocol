@@ -1,7 +1,19 @@
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import {
+  generateKeypair,
+  keypairFromSecretKey,
+  deriveAddress,
+  bytesToHex,
+  buildAndSignTransaction,
+  hexToBytes,
+} from '../lib/crypto';
 
-export type Network = "mainnet" | "testnet" | "devnet";
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export type Network = 'mainnet' | 'testnet' | 'devnet';
 
 export interface TokenBalance {
   symbol: string;
@@ -14,13 +26,13 @@ export interface TokenBalance {
 export interface Transaction {
   id: string;
   hash: string;
-  type: "send" | "receive" | "credit_issued" | "credit_repay";
+  type: 'send' | 'receive' | 'credit_issued' | 'credit_repay';
   amount: number;
   symbol: string;
   from: string;
   to: string;
   fee: number;
-  status: "pending" | "confirmed" | "failed";
+  status: 'pending' | 'confirmed' | 'failed';
   timestamp: number;
   blockHeight?: number;
   payload?: string;
@@ -33,189 +45,234 @@ export interface CreditLine {
   used: number;
   rate: number;
   term: string;
-  status: "active" | "pending" | "expired";
+  status: 'active' | 'pending' | 'expired';
 }
 
+// ---------------------------------------------------------------------------
+// Store interface
+// ---------------------------------------------------------------------------
+
 interface WalletState {
+  // Wallet identity
   address: string;
   publicKey: string;
+  secretKey: string;
+  isWalletInitialized: boolean;
   createdAt: string;
+
+  // Network config
   network: Network;
   nodeUrl: string;
-  theme: "dark" | "light";
+  theme: 'dark' | 'light';
+
+  // Node status
+  networkConnected: boolean;
+  blockHeight: number;
+
+  // Balances & transactions
   balances: TokenBalance[];
   transactions: Transaction[];
   creditScore: number;
   creditLines: CreditLine[];
 
+  // Actions - wallet lifecycle
+  createWallet: () => { secretKeyHex: string; address: string };
+  importWallet: (secretKeyHex: string) => void;
+  lockWallet: () => void;
+
+  // Actions - data
   setWallet: (address: string, publicKey: string) => void;
   updateBalances: (balances: TokenBalance[]) => void;
   addTransaction: (tx: Transaction) => void;
+  updateTransactionStatus: (id: string, status: Transaction['status'], blockHeight?: number) => void;
+  setNetworkStatus: (connected: boolean, blockHeight?: number) => void;
   setNetwork: (network: Network) => void;
   setNodeUrl: (url: string) => void;
-  setTheme: (theme: "dark" | "light") => void;
+  setTheme: (theme: 'dark' | 'light') => void;
 }
 
-const MOCK_ADDRESS = "nova1q9g7f3k2x8p4m5n6j7h8d9s0a2w3e4r5t6y7u";
-const MOCK_PUBLIC_KEY =
-  "04a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9";
+// ---------------------------------------------------------------------------
+// Network URL mapping
+// ---------------------------------------------------------------------------
 
-const MOCK_BALANCES: TokenBalance[] = [
-  {
-    symbol: "NOVA",
-    name: "Nova Token",
-    balance: 12_847.35,
-    usdValue: 38_542.05,
-    change24h: 3.42,
-  },
-  {
-    symbol: "USDN",
-    name: "Nova USD",
-    balance: 5_230.0,
-    usdValue: 5_230.0,
-    change24h: 0.01,
-  },
-  {
-    symbol: "stNOVA",
-    name: "Staked Nova",
-    balance: 3_500.0,
-    usdValue: 10_570.0,
-    change24h: 3.51,
-  },
-  {
-    symbol: "CRED",
-    name: "Credit Token",
-    balance: 890.5,
-    usdValue: 1_425.8,
-    change24h: -1.23,
-  },
-];
+const NETWORK_URLS: Record<Network, string> = {
+  mainnet: 'https://rpc.nova-protocol.io',
+  testnet: 'https://testnet-rpc.nova-protocol.io',
+  devnet: 'https://devnet-rpc.nova-protocol.io',
+};
 
-const MOCK_TRANSACTIONS: Transaction[] = [
-  {
-    id: "tx-001",
-    hash: "0xab3f91c7d8e2a4b56c1d9e8f7a6b5c4d3e2f1a0b",
-    type: "receive",
-    amount: 1_250.0,
-    symbol: "NOVA",
-    from: "nova1m8k3j2h1g6f5d4s3a2p1o0i9u8y7t6r5e4w3q",
-    to: MOCK_ADDRESS,
-    fee: 0.001,
-    status: "confirmed",
-    timestamp: Date.now() - 3_600_000,
-    blockHeight: 1_847_293,
-  },
-  {
-    id: "tx-002",
-    hash: "0xcd5e82b1a9f3c4d67e8f0a1b2c3d4e5f6a7b8c9d",
-    type: "send",
-    amount: 500.0,
-    symbol: "USDN",
-    from: MOCK_ADDRESS,
-    to: "nova1z9x8c7v6b5n4m3a2s1d0f9g8h7j6k5l4p3o2i",
-    fee: 0.0005,
-    status: "confirmed",
-    timestamp: Date.now() - 7_200_000,
-    blockHeight: 1_847_201,
-  },
-  {
-    id: "tx-003",
-    hash: "0xef1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a",
-    type: "send",
-    amount: 75.0,
-    symbol: "NOVA",
-    from: MOCK_ADDRESS,
-    to: "nova1p2o3i4u5y6t7r8e9w0q1a2s3d4f5g6h7j8k9l",
-    fee: 0.001,
-    status: "pending",
-    timestamp: Date.now() - 300_000,
-    payload: "Coffee subscription",
-  },
-  {
-    id: "tx-004",
-    hash: "0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
-    type: "credit_issued",
-    amount: 2_000.0,
-    symbol: "USDN",
-    from: "nova1credit_pool_alpha",
-    to: MOCK_ADDRESS,
-    fee: 0.002,
-    status: "confirmed",
-    timestamp: Date.now() - 86_400_000,
-    blockHeight: 1_846_100,
-  },
-  {
-    id: "tx-005",
-    hash: "0x2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c",
-    type: "receive",
-    amount: 3_200.0,
-    symbol: "NOVA",
-    from: "nova1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z",
-    to: MOCK_ADDRESS,
-    fee: 0.001,
-    status: "confirmed",
-    timestamp: Date.now() - 172_800_000,
-    blockHeight: 1_845_022,
-  },
-];
+function getDefaultNodeUrl(): string {
+  try {
+    return import.meta.env.VITE_NODE_URL || 'http://localhost:9741';
+  } catch {
+    return 'http://localhost:9741';
+  }
+}
 
-const MOCK_CREDIT_LINES: CreditLine[] = [
-  {
-    id: "cl-001",
-    provider: "Nova Prime Pool",
-    limit: 10_000,
-    used: 2_000,
-    rate: 4.5,
-    term: "90 days",
-    status: "active",
-  },
-  {
-    id: "cl-002",
-    provider: "DeFi Credit DAO",
-    limit: 5_000,
-    used: 0,
-    rate: 6.2,
-    term: "30 days",
-    status: "active",
-  },
-];
+// ---------------------------------------------------------------------------
+// Store
+// ---------------------------------------------------------------------------
 
 export const useWalletStore = create<WalletState>()(
   persist(
     (set) => ({
-      address: MOCK_ADDRESS,
-      publicKey: MOCK_PUBLIC_KEY,
-      createdAt: "2025-09-15T10:30:00Z",
-      network: "mainnet",
-      nodeUrl: "https://rpc.nova-protocol.io",
-      theme: "dark",
-      balances: MOCK_BALANCES,
-      transactions: MOCK_TRANSACTIONS,
-      creditScore: 782,
-      creditLines: MOCK_CREDIT_LINES,
+      // Initial state - no wallet
+      address: '',
+      publicKey: '',
+      secretKey: '',
+      isWalletInitialized: false,
+      createdAt: '',
+      network: 'mainnet',
+      nodeUrl: getDefaultNodeUrl(),
+      theme: 'dark',
+      networkConnected: false,
+      blockHeight: 0,
+      balances: [],
+      transactions: [],
+      creditScore: 0,
+      creditLines: [],
+
+      // -------------------------------------------------------------------
+      // Wallet lifecycle
+      // -------------------------------------------------------------------
+
+      createWallet: () => {
+        const keypair = generateKeypair();
+        const address = deriveAddress(keypair.publicKey);
+        const publicKeyHex = bytesToHex(keypair.publicKey);
+        const secretKeyHex = bytesToHex(keypair.secretKey);
+
+        set({
+          address,
+          publicKey: publicKeyHex,
+          secretKey: secretKeyHex,
+          isWalletInitialized: true,
+          createdAt: new Date().toISOString(),
+          balances: [],
+          transactions: [],
+          creditScore: 0,
+          creditLines: [],
+        });
+
+        return { secretKeyHex, address };
+      },
+
+      importWallet: (secretKeyHex: string) => {
+        const keypair = keypairFromSecretKey(secretKeyHex);
+        const address = deriveAddress(keypair.publicKey);
+        const publicKeyHex = bytesToHex(keypair.publicKey);
+
+        set({
+          address,
+          publicKey: publicKeyHex,
+          secretKey: secretKeyHex,
+          isWalletInitialized: true,
+          createdAt: new Date().toISOString(),
+          balances: [],
+          transactions: [],
+          creditScore: 0,
+          creditLines: [],
+        });
+      },
+
+      lockWallet: () => {
+        set({
+          address: '',
+          publicKey: '',
+          secretKey: '',
+          isWalletInitialized: false,
+          createdAt: '',
+          balances: [],
+          transactions: [],
+          creditScore: 0,
+          creditLines: [],
+          networkConnected: false,
+          blockHeight: 0,
+        });
+      },
+
+      // -------------------------------------------------------------------
+      // Data actions
+      // -------------------------------------------------------------------
 
       setWallet: (address, publicKey) => set({ address, publicKey }),
+
       updateBalances: (balances) => set({ balances }),
+
       addTransaction: (tx) =>
         set((state) => ({ transactions: [tx, ...state.transactions] })),
+
+      updateTransactionStatus: (id, status, blockHeight) =>
+        set((state) => ({
+          transactions: state.transactions.map((tx) =>
+            tx.id === id ? { ...tx, status, blockHeight: blockHeight ?? tx.blockHeight } : tx,
+          ),
+        })),
+
+      setNetworkStatus: (connected, blockHeight) =>
+        set({
+          networkConnected: connected,
+          ...(blockHeight !== undefined ? { blockHeight } : {}),
+        }),
+
       setNetwork: (network) => {
-        const urls: Record<Network, string> = {
-          mainnet: "https://rpc.nova-protocol.io",
-          testnet: "https://testnet-rpc.nova-protocol.io",
-          devnet: "https://devnet-rpc.nova-protocol.io",
-        };
-        set({ network, nodeUrl: urls[network] });
+        set({ network, nodeUrl: NETWORK_URLS[network] });
       },
+
       setNodeUrl: (nodeUrl) => set({ nodeUrl }),
+
       setTheme: (theme) => set({ theme }),
     }),
     {
-      name: "nova-wallet-storage",
+      name: 'nova-wallet-storage',
       partialize: (state) => ({
+        address: state.address,
+        publicKey: state.publicKey,
+        secretKey: state.secretKey,
+        isWalletInitialized: state.isWalletInitialized,
+        createdAt: state.createdAt,
         network: state.network,
         nodeUrl: state.nodeUrl,
         theme: state.theme,
+        transactions: state.transactions,
       }),
-    }
-  )
+    },
+  ),
 );
+
+// ---------------------------------------------------------------------------
+// Transaction signing helper (exported for use in hooks)
+// ---------------------------------------------------------------------------
+
+export function signAndBuildTx(params: {
+  recipient: string;
+  amount: number;
+  currency: string;
+  payload?: string;
+}): { txId: string; signedTx: Record<string, unknown> } {
+  const state = useWalletStore.getState();
+
+  if (!state.secretKey || !state.publicKey) {
+    throw new Error('Wallet not initialized');
+  }
+
+  const encoder = new TextEncoder();
+  const payloadBytes = params.payload
+    ? encoder.encode(params.payload)
+    : new Uint8Array(0);
+
+  // Convert human-readable amount to atomic units (1 NOVA = 1e8 units).
+  const atomicAmount = BigInt(Math.round(params.amount * 1e8));
+  const atomicFee = params.currency === 'NOVA' ? 100_000n : 50_000n; // 0.001 / 0.0005
+
+  return buildAndSignTransaction({
+    sender: state.address,
+    receiver: params.recipient,
+    amount: atomicAmount,
+    currency: params.currency,
+    fee: atomicFee,
+    payload: payloadBytes,
+    secretKey: hexToBytes(state.secretKey),
+    publicKey: hexToBytes(state.publicKey),
+  });
+}

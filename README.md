@@ -118,13 +118,13 @@ graph TB
         VT["vault<br/>Multi-asset wallet<br/>credit lines"]
         NT["ntp<br/>5-step payment<br/>PFS sessions"]
         NW["network<br/>Consensus, mempool<br/>gossip, sync"]
-        ST["storage<br/>RocksDB, blocks<br/>state trie"]
+        ST["storage<br/>sled, blocks<br/>state tree"]
         CC["credit<br/>Scoring, marketplace<br/>real-time bidding"]
     end
 
     subgraph "Infrastructure"
         P2P["libp2p<br/>TCP + Noise + Yamux"]
-        DB["RocksDB<br/>Column families"]
+        DB["sled<br/>Named B+ trees"]
     end
 
     WW --> TS
@@ -208,7 +208,7 @@ sequenceDiagram
 
 - **Rust** 1.75+ (install via [rustup](https://rustup.rs))
 - **Node.js** 20+ (for TypeScript SDK and web apps)
-- **Python** 3.11+ (for Python SDK)
+- **Python** 3.10+ (for Python SDK)
 - **Docker** and **Docker Compose** (for local devnet)
 
 ### Build from Source
@@ -530,6 +530,8 @@ nova-protocol/
 │       │   ├── node.rs          # Validator node lifecycle
 │       │   ├── consensus.rs     # Hybrid PoS+PoA consensus engine
 │       │   ├── mempool.rs       # Priority transaction pool
+│       │   ├── producer.rs       # Block production pipeline
+│       │   ├── consensus_loop.rs # Async consensus-driven block loop
 │       │   ├── gossip.rs        # Gossip protocol for propagation
 │       │   ├── rpc.rs           # JSON-RPC type definitions
 │       │   └── sync.rs          # Chain state synchronization
@@ -537,10 +539,12 @@ nova-protocol/
 │       │   ├── mod.rs
 │       │   ├── block.rs         # Block structure and hash operations
 │       │   ├── chain.rs         # In-memory chain with validation
-│       │   ├── state.rs         # Merkle Patricia Trie for account state
-│       │   └── db.rs            # RocksDB persistence layer
+│       │   ├── state.rs         # Sparse Merkle Tree for account state
+│       │   └── db.rs            # sled persistence layer
 │       └── credit/              # Credit scoring and marketplace
 │           └── mod.rs
+│   └── tests/
+│       └── e2e.rs               # End-to-end integration tests
 │
 ├── node/                        # Standalone validator node binary
 │   ├── Cargo.toml
@@ -683,20 +687,22 @@ The distributed systems layer. Handles everything from peer discovery to block f
 | `node.rs` | Validator node lifecycle, peer management, startup/shutdown |
 | `consensus.rs` | Hybrid PoS+PoA consensus engine with BFT finality |
 | `mempool.rs` | Priority-ordered transaction pool with thread-safe access |
+| `producer.rs` | Block production pipeline |
+| `consensus_loop.rs` | Async consensus-driven block loop |
 | `gossip.rs` | Gossip protocol with BLAKE3 deduplication and bounded TTL |
 | `rpc.rs` | JSON-RPC method definitions (transport-agnostic) |
 | `sync.rs` | Chain state synchronization between peers |
 
 ### `storage` -- Persistent Storage
 
-The data layer. RocksDB with column families for blocks, state, transactions, and receipts. Bincode for on-disk serialization (compact, fast, deterministic). JSON is for APIs; bincode is for storage.
+The data layer. sled with named B+ trees for blocks, state, transactions, and receipts. Bincode for on-disk serialization (compact, fast, deterministic). JSON is for APIs; bincode is for storage.
 
 | File | Purpose |
 |------|---------|
 | `block.rs` | Block structure, genesis block, BLAKE3 hash computation |
 | `chain.rs` | In-memory chain management with hash-chain validation |
-| `state.rs` | Simplified Merkle Patricia Trie for account state |
-| `db.rs` | RocksDB persistence with column families and tuned compaction |
+| `state.rs` | Sparse Merkle Tree (256-bit keyspace, BLAKE3) for account state |
+| `db.rs` | sled persistence with named B+ trees and atomic batch writes |
 
 ### `credit` -- Credit Marketplace
 
@@ -908,7 +914,7 @@ These are not theoretical numbers. These are the targets we are engineering towa
 | **Ed25519 signing** | < 50us | Per transaction |
 | **Ed25519 verification** | < 100us | Per transaction, batch-optimizable |
 | **Transaction size** | ~300 bytes | Base transfer without ZKP |
-| **State trie proof** | < 1KB | Merkle inclusion proof |
+| **State tree proof** | < 1KB | Merkle inclusion proof |
 | **P2P gossip latency** | < 200ms | 95th percentile across validator set |
 
 ### Running Benchmarks
@@ -1379,7 +1385,7 @@ pip install -e ".[dev]"
 - Async `NovaClient` with `httpx` for JSON-RPC and REST
 - Pydantic V2 models for all API types (fully typed, validated)
 - Transaction builder with Pythonic API
-- Compatible with Python 3.11+
+- Compatible with Python 3.10+
 
 ```bash
 # Run the SDK test suite
@@ -1396,7 +1402,9 @@ python -m pytest tests/ -v
 - [x] Core protocol library: crypto, identity, transaction, ZKP, vault, NTP
 - [x] Groth16 balance proofs over BN254 with arkworks
 - [x] Hybrid PoS+PoA consensus engine
+- [x] Block production pipeline and async consensus loop
 - [x] Standalone validator node with JSON-RPC API
+- [x] End-to-end integration test suite
 - [x] TypeScript and Python SDKs
 - [x] Consumer wallet, merchant terminal, and block explorer apps
 - [x] Docker-based 4-node local devnet
@@ -1455,7 +1463,7 @@ rustup component add clippy rustfmt
 # Install Node.js 20+ (for TypeScript SDK and web apps)
 # Use nvm, fnm, or your preferred version manager
 
-# Install Python 3.11+ (for Python SDK)
+# Install Python 3.10+ (for Python SDK)
 # Use pyenv or your system package manager
 ```
 

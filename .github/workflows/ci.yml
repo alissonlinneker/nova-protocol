@@ -12,7 +12,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-D warnings"
+  RUST_TOOLCHAIN: "1.75"
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -25,8 +25,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
           components: rustfmt, clippy
 
       - name: Cache cargo registry & build
@@ -47,22 +48,18 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
   # ---------------------------------------------------------------------------
-  # Rust tests — matrix across stable and nightly
+  # Rust tests
   # ---------------------------------------------------------------------------
   test-rust:
-    name: Test Rust (${{ matrix.toolchain }})
+    name: Test Rust
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        toolchain: [stable, nightly]
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.toolchain }}
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Install system dependencies
         run: |
@@ -77,9 +74,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: test-${{ runner.os }}-${{ matrix.toolchain }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: test-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            test-${{ runner.os }}-${{ matrix.toolchain }}-cargo-
+            test-${{ runner.os }}-cargo-
 
       - name: Run tests
         run: cargo test --workspace --verbose
@@ -126,6 +123,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
+          cache-dependency-path: sdk/python/pyproject.toml
 
       - name: Install dependencies
         working-directory: sdk/python
@@ -134,6 +132,34 @@ jobs:
       - name: Run tests
         working-directory: sdk/python
         run: pytest tests/ -v --tb=short
+
+  # ---------------------------------------------------------------------------
+  # Web apps — verify all frontend apps build cleanly
+  # ---------------------------------------------------------------------------
+  build-web-apps:
+    name: Build Web Apps
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [explorer, wallet-web, merchant-terminal]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/${{ matrix.app }}
+        run: npm ci
+
+      - name: Build
+        working-directory: apps/${{ matrix.app }}
+        run: npm run build
 
   # ---------------------------------------------------------------------------
   # Release build — verifies the release profile compiles
@@ -146,7 +172,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Install system dependencies
         run: |

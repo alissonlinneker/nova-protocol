@@ -1,9 +1,11 @@
-import { useState } from "react";
-import { useWallet } from "../hooks/useWallet";
+import { useState } from 'react';
+import { useWallet } from '../hooks/useWallet';
+import { useNova } from '../hooks/useNova';
 
 export default function IdentityCard() {
   const { address, createdAt, truncatedAddress, truncatedPublicKey, network } =
     useWallet();
+  const { isNodeConnected } = useNova();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -12,11 +14,13 @@ export default function IdentityCard() {
     setTimeout(() => setCopied(false), 2_000);
   };
 
-  const formattedDate = new Date(createdAt).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  const formattedDate = createdAt
+    ? new Date(createdAt).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      })
+    : 'N/A';
 
   return (
     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-nova-700 via-nova-600 to-accent-600 p-[1px]">
@@ -51,8 +55,14 @@ export default function IdentityCard() {
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs text-emerald-400 font-medium">Connected</span>
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isNodeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'
+                }`}
+              />
+              <span className={`text-xs font-medium ${isNodeConnected ? 'text-emerald-400' : 'text-red-400'}`}>
+                {isNodeConnected ? 'Connected' : 'Offline'}
+              </span>
             </div>
           </div>
 

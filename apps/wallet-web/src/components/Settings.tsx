@@ -1,25 +1,36 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { useWalletStore } from "../stores/walletStore";
-import type { Network } from "../stores/walletStore";
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useWalletStore } from '../stores/walletStore';
+import type { Network } from '../stores/walletStore';
 
 export default function Settings() {
-  const { network, nodeUrl, theme, setNetwork, setNodeUrl, setTheme } =
-    useWalletStore();
+  const {
+    network,
+    nodeUrl,
+    theme,
+    secretKey,
+    address,
+    setNetwork,
+    setNodeUrl,
+    setTheme,
+    lockWallet,
+  } = useWalletStore();
 
   const [customUrl, setCustomUrl] = useState(nodeUrl);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showLockModal, setShowLockModal] = useState(false);
   const [urlSaved, setUrlSaved] = useState(false);
+  const [keyRevealed, setKeyRevealed] = useState(false);
+  const [keyCopied, setKeyCopied] = useState(false);
 
   const handleNetworkChange = (newNetwork: Network) => {
     setNetwork(newNetwork);
-    setCustomUrl(
-      newNetwork === "mainnet"
-        ? "https://rpc.nova-protocol.io"
-        : newNetwork === "testnet"
-        ? "https://testnet-rpc.nova-protocol.io"
-        : "https://devnet-rpc.nova-protocol.io"
-    );
+    const urls: Record<Network, string> = {
+      mainnet: 'https://rpc.nova-protocol.io',
+      testnet: 'https://testnet-rpc.nova-protocol.io',
+      devnet: 'https://devnet-rpc.nova-protocol.io',
+    };
+    setCustomUrl(urls[newNetwork]);
   };
 
   const handleSaveUrl = () => {
@@ -28,21 +39,32 @@ export default function Settings() {
     setTimeout(() => setUrlSaved(false), 2_000);
   };
 
+  const handleCopyKey = async () => {
+    await navigator.clipboard.writeText(secretKey);
+    setKeyCopied(true);
+    setTimeout(() => setKeyCopied(false), 2_000);
+  };
+
+  const handleLock = () => {
+    lockWallet();
+    setShowLockModal(false);
+  };
+
   const networks: { id: Network; label: string; description: string }[] = [
     {
-      id: "mainnet",
-      label: "Mainnet",
-      description: "Production network with real assets",
+      id: 'mainnet',
+      label: 'Mainnet',
+      description: 'Production network with real assets',
     },
     {
-      id: "testnet",
-      label: "Testnet",
-      description: "Test network with faucet tokens",
+      id: 'testnet',
+      label: 'Testnet',
+      description: 'Test network with faucet tokens',
     },
     {
-      id: "devnet",
-      label: "Devnet",
-      description: "Development network for builders",
+      id: 'devnet',
+      label: 'Devnet',
+      description: 'Development network for builders',
     },
   ];
 
@@ -61,6 +83,21 @@ export default function Settings() {
         <h1 className="text-xl font-bold text-white">Settings</h1>
       </div>
 
+      {/* Wallet Info */}
+      <div className="nova-card">
+        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
+          Wallet
+        </h3>
+        <div className="bg-gray-800/50 rounded-xl p-3 mb-3">
+          <label className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
+            Address
+          </label>
+          <p className="text-xs font-mono text-gray-300 mt-1 break-all select-all">
+            {address}
+          </p>
+        </div>
+      </div>
+
       {/* Network Selection */}
       <div className="nova-card">
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
@@ -73,8 +110,8 @@ export default function Settings() {
               onClick={() => handleNetworkChange(net.id)}
               className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all text-left ${
                 network === net.id
-                  ? "border-nova-500 bg-nova-500/5 ring-1 ring-nova-500/30"
-                  : "border-gray-800 bg-gray-800/30 hover:border-gray-700"
+                  ? 'border-nova-500 bg-nova-500/5 ring-1 ring-nova-500/30'
+                  : 'border-gray-800 bg-gray-800/30 hover:border-gray-700'
               }`}
             >
               <div>
@@ -84,8 +121,8 @@ export default function Settings() {
               <div
                 className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
                   network === net.id
-                    ? "border-nova-500"
-                    : "border-gray-600"
+                    ? 'border-nova-500'
+                    : 'border-gray-600'
                 }`}
               >
                 {network === net.id && (
@@ -107,14 +144,14 @@ export default function Settings() {
             type="url"
             value={customUrl}
             onChange={(e) => setCustomUrl(e.target.value)}
-            placeholder="https://rpc.nova-protocol.io"
+            placeholder="http://localhost:9741"
             className="nova-input flex-1 font-mono text-sm"
           />
           <button
             onClick={handleSaveUrl}
             className="nova-btn-primary px-4 shrink-0"
           >
-            {urlSaved ? "Saved" : "Save"}
+            {urlSaved ? 'Saved' : 'Save'}
           </button>
         </div>
         <p className="text-xs text-gray-600 mt-2">
@@ -129,11 +166,11 @@ export default function Settings() {
         </h3>
         <div className="flex gap-3">
           <button
-            onClick={() => setTheme("dark")}
+            onClick={() => setTheme('dark')}
             className={`flex-1 flex items-center gap-3 p-4 rounded-xl border transition-all ${
-              theme === "dark"
-                ? "border-nova-500 bg-nova-500/5"
-                : "border-gray-800 hover:border-gray-700"
+              theme === 'dark'
+                ? 'border-nova-500 bg-nova-500/5'
+                : 'border-gray-800 hover:border-gray-700'
             }`}
           >
             <div className="w-10 h-10 rounded-xl bg-gray-800 flex items-center justify-center">
@@ -144,11 +181,11 @@ export default function Settings() {
             <span className="text-sm font-medium text-white">Dark</span>
           </button>
           <button
-            onClick={() => setTheme("light")}
+            onClick={() => setTheme('light')}
             className={`flex-1 flex items-center gap-3 p-4 rounded-xl border transition-all ${
-              theme === "light"
-                ? "border-nova-500 bg-nova-500/5"
-                : "border-gray-800 hover:border-gray-700"
+              theme === 'light'
+                ? 'border-nova-500 bg-nova-500/5'
+                : 'border-gray-800 hover:border-gray-700'
             }`}
           >
             <div className="w-10 h-10 rounded-xl bg-gray-800 flex items-center justify-center">
@@ -168,7 +205,11 @@ export default function Settings() {
         </h3>
         <div className="space-y-3">
           <button
-            onClick={() => setShowExportModal(true)}
+            onClick={() => {
+              setShowExportModal(true);
+              setKeyRevealed(false);
+              setKeyCopied(false);
+            }}
             className="w-full flex items-center justify-between p-4 rounded-xl bg-gray-800/50 border border-gray-800 hover:border-gray-700 transition-all"
           >
             <div className="flex items-center gap-3">
@@ -178,9 +219,9 @@ export default function Settings() {
                 </svg>
               </div>
               <div className="text-left">
-                <p className="text-sm font-medium text-white">Export Keys</p>
+                <p className="text-sm font-medium text-white">Export Secret Key</p>
                 <p className="text-xs text-gray-500">
-                  Backup your private key securely
+                  Back up your Ed25519 secret key
                 </p>
               </div>
             </div>
@@ -189,17 +230,20 @@ export default function Settings() {
             </svg>
           </button>
 
-          <button className="w-full flex items-center justify-between p-4 rounded-xl bg-gray-800/50 border border-gray-800 hover:border-gray-700 transition-all">
+          <button
+            onClick={() => setShowLockModal(true)}
+            className="w-full flex items-center justify-between p-4 rounded-xl bg-gray-800/50 border border-red-900/30 hover:border-red-800/50 transition-all"
+          >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-nova-500/10 flex items-center justify-center">
-                <svg className="w-5 h-5 text-nova-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+              <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9" />
                 </svg>
               </div>
               <div className="text-left">
-                <p className="text-sm font-medium text-white">Recovery Phrase</p>
+                <p className="text-sm font-medium text-red-400">Lock Wallet</p>
                 <p className="text-xs text-gray-500">
-                  View your 24-word recovery phrase
+                  Clear keys from memory and return to setup
                 </p>
               </div>
             </div>
@@ -217,12 +261,12 @@ export default function Settings() {
         </p>
       </div>
 
-      {/* Export Modal */}
+      {/* Export Key Modal */}
       {showExportModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 max-w-md w-full">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">Export Keys</h3>
+              <h3 className="text-lg font-semibold text-white">Export Secret Key</h3>
               <button
                 onClick={() => setShowExportModal(false)}
                 className="w-8 h-8 rounded-lg bg-gray-800 flex items-center justify-center hover:bg-gray-700 transition-colors"
@@ -235,18 +279,24 @@ export default function Settings() {
 
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-4">
               <p className="text-sm text-amber-400">
-                Never share your private key with anyone. Anyone with access to
-                your private key can control your funds.
+                Never share your secret key with anyone. Anyone with access to
+                this key can control your funds.
               </p>
             </div>
 
             <div className="bg-gray-800 rounded-xl p-4 mb-4">
               <label className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
-                Private Key (Encrypted)
+                Ed25519 Secret Key (hex)
               </label>
-              <p className="text-xs font-mono text-gray-400 mt-2 break-all select-all">
-                ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
-              </p>
+              {keyRevealed ? (
+                <p className="text-xs font-mono text-gray-300 mt-2 break-all select-all">
+                  {secretKey}
+                </p>
+              ) : (
+                <p className="text-xs font-mono text-gray-500 mt-2">
+                  {'*'.repeat(64)}
+                </p>
+              )}
             </div>
 
             <div className="flex gap-3">
@@ -254,10 +304,61 @@ export default function Settings() {
                 onClick={() => setShowExportModal(false)}
                 className="nova-btn-secondary flex-1"
               >
+                Close
+              </button>
+              {keyRevealed ? (
+                <button onClick={handleCopyKey} className="nova-btn-primary flex-1">
+                  {keyCopied ? 'Copied' : 'Copy Key'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setKeyRevealed(true)}
+                  className="nova-btn-primary flex-1"
+                >
+                  Reveal Key
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lock Wallet Modal */}
+      {showLockModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 max-w-md w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">Lock Wallet</h3>
+              <button
+                onClick={() => setShowLockModal(false)}
+                className="w-8 h-8 rounded-lg bg-gray-800 flex items-center justify-center hover:bg-gray-700 transition-colors"
+              >
+                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-4">
+              <p className="text-sm text-red-400">
+                This will clear your keys from memory and local storage.
+                Make sure you have backed up your secret key before proceeding.
+                You will need it to re-import your wallet.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLockModal(false)}
+                className="nova-btn-secondary flex-1"
+              >
                 Cancel
               </button>
-              <button className="nova-btn-primary flex-1">
-                Reveal Key
+              <button
+                onClick={handleLock}
+                className="flex-1 bg-red-600 hover:bg-red-500 text-white font-medium py-2.5 px-5 rounded-xl transition-all duration-200 active:scale-95"
+              >
+                Lock Wallet
               </button>
             </div>
           </div>

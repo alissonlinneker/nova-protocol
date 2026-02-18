@@ -24,15 +24,16 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-[project.urls]
-Homepage = "https://github.com/alissonlinneker/nova-protocol"
-Repository = "https://github.com/alissonlinneker/nova-protocol"
 dependencies = [
     "cryptography>=42.0",
     "pydantic>=2.6",
     "httpx>=0.27",
     "pynacl>=1.5",
 ]
+
+[project.urls]
+Homepage = "https://github.com/alissonlinneker/nova-protocol"
+Repository = "https://github.com/alissonlinneker/nova-protocol"
 
 [project.optional-dependencies]
 dev = [

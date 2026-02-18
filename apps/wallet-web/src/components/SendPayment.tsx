@@ -1,9 +1,10 @@
-import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
-import { useWallet } from "../hooks/useWallet";
-import { useNova } from "../hooks/useNova";
+import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { useWallet } from '../hooks/useWallet';
+import { useNova } from '../hooks/useNova';
+import { isValidAddress } from '../lib/crypto';
 
-type Step = "form" | "review" | "sending" | "result";
+type Step = 'form' | 'review' | 'sending' | 'result';
 
 interface SendForm {
   recipient: string;
@@ -16,66 +17,89 @@ export default function SendPayment() {
   const { balances, address } = useWallet();
   const { transfer, estimateFee } = useNova();
 
-  const [step, setStep] = useState<Step>("form");
+  const [step, setStep] = useState<Step>('form');
   const [form, setForm] = useState<SendForm>({
-    recipient: "",
-    amount: "",
-    symbol: "NOVA",
-    payload: "",
+    recipient: '',
+    amount: '',
+    symbol: 'NOVA',
+    payload: '',
   });
   const [fee, setFee] = useState<number>(0);
-  const [txHash, setTxHash] = useState<string>("");
-  const [error, setError] = useState<string>("");
+  const [txHash, setTxHash] = useState<string>('');
+  const [error, setError] = useState<string>('');
 
   const selectedBalance = useMemo(
     () => balances.find((b) => b.symbol === form.symbol),
-    [balances, form.symbol]
+    [balances, form.symbol],
   );
 
   const isFormValid = useMemo(() => {
     const amount = parseFloat(form.amount);
     return (
-      form.recipient.startsWith("nova1") &&
-      form.recipient.length >= 20 &&
+      isValidAddress(form.recipient) &&
+      form.recipient !== address &&
       amount > 0 &&
-      selectedBalance &&
-      amount <= selectedBalance.balance
+      (!selectedBalance || amount <= selectedBalance.balance)
     );
-  }, [form, selectedBalance]);
+  }, [form, selectedBalance, address]);
+
+  const addressError = useMemo(() => {
+    if (!form.recipient) return '';
+    if (form.recipient === address) return 'Cannot send to your own address';
+    if (!form.recipient.startsWith('nova1')) return 'Address must start with "nova1"';
+    if (form.recipient.length > 5 && !isValidAddress(form.recipient)) {
+      return 'Invalid NOVA address format';
+    }
+    return '';
+  }, [form.recipient, address]);
 
   const handleReview = async () => {
     try {
       const estimatedFee = await estimateFee(form.symbol);
       setFee(estimatedFee);
-      setStep("review");
+      setStep('review');
     } catch {
-      setError("Failed to estimate fee. Please try again.");
+      setError('Failed to estimate fee. Using default fee schedule.');
+      setFee(form.symbol === 'NOVA' ? 0.001 : 0.0005);
+      setStep('review');
     }
   };
 
   const handleConfirm = async () => {
-    setStep("sending");
-    setError("");
+    setStep('sending');
+    setError('');
     try {
       const result = await transfer(
         form.recipient,
         parseFloat(form.amount),
         form.symbol,
-        form.payload || undefined
+        form.payload || undefined,
       );
       setTxHash(result.hash);
-      setStep("result");
-    } catch {
-      setError("Transaction failed. Please try again.");
-      setStep("review");
+      setStep('result');
+    } catch (err) {
+      // Even on submission failure, the tx was signed locally.
+      // Show the local tx hash if available.
+      const txError = err as Error & { txHash?: string };
+      if (txError.txHash) {
+        setTxHash(txError.txHash);
+        setError(
+          'Transaction was signed but could not be submitted to the network. ' +
+          'It has been saved locally and can be resubmitted when the node is available.',
+        );
+        setStep('result');
+      } else {
+        setError('Transaction failed. Please check your connection and try again.');
+        setStep('review');
+      }
     }
   };
 
   const handleReset = () => {
-    setForm({ recipient: "", amount: "", symbol: "NOVA", payload: "" });
-    setStep("form");
-    setTxHash("");
-    setError("");
+    setForm({ recipient: '', amount: '', symbol: 'NOVA', payload: '' });
+    setStep('form');
+    setTxHash('');
+    setError('');
   };
 
   return (
@@ -95,24 +119,24 @@ export default function SendPayment() {
 
       {/* Step Indicator */}
       <div className="flex items-center gap-2">
-        {["form", "review", "result"].map((s, i) => (
+        {['form', 'review', 'result'].map((s, i) => (
           <div key={s} className="flex items-center gap-2">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                step === s || (step === "sending" && s === "review")
-                  ? "bg-nova-600 text-white"
-                  : i < ["form", "review", "result"].indexOf(step === "sending" ? "review" : step)
-                  ? "bg-nova-600/30 text-nova-300"
-                  : "bg-gray-800 text-gray-500"
+                step === s || (step === 'sending' && s === 'review')
+                  ? 'bg-nova-600 text-white'
+                  : i < ['form', 'review', 'result'].indexOf(step === 'sending' ? 'review' : step)
+                  ? 'bg-nova-600/30 text-nova-300'
+                  : 'bg-gray-800 text-gray-500'
               }`}
             >
               {i + 1}
             </div>
             {i < 2 && (
               <div className={`w-12 h-0.5 ${
-                i < ["form", "review", "result"].indexOf(step === "sending" ? "review" : step)
-                  ? "bg-nova-600"
-                  : "bg-gray-800"
+                i < ['form', 'review', 'result'].indexOf(step === 'sending' ? 'review' : step)
+                  ? 'bg-nova-600'
+                  : 'bg-gray-800'
               }`} />
             )}
           </div>
@@ -126,7 +150,7 @@ export default function SendPayment() {
       )}
 
       {/* Form Step */}
-      {step === "form" && (
+      {step === 'form' && (
         <div className="space-y-4">
           <div className="nova-card space-y-4">
             {/* Recipient */}
@@ -152,6 +176,9 @@ export default function SendPayment() {
                   </svg>
                 </button>
               </div>
+              {addressError && (
+                <p className="text-xs text-red-400 mt-1">{addressError}</p>
+              )}
             </div>
 
             {/* Amount */}
@@ -166,7 +193,7 @@ export default function SendPayment() {
                   onChange={(e) => setForm({ ...form, amount: e.target.value })}
                   placeholder="0.00"
                   min="0"
-                  step="0.01"
+                  step="0.00000001"
                   className="nova-input flex-1 text-lg font-semibold"
                 />
                 <select
@@ -174,16 +201,20 @@ export default function SendPayment() {
                   onChange={(e) => setForm({ ...form, symbol: e.target.value })}
                   className="nova-input w-32 text-sm font-medium"
                 >
-                  {balances.map((b) => (
-                    <option key={b.symbol} value={b.symbol}>
-                      {b.symbol}
-                    </option>
-                  ))}
+                  {balances.length > 0 ? (
+                    balances.map((b) => (
+                      <option key={b.symbol} value={b.symbol}>
+                        {b.symbol}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="NOVA">NOVA</option>
+                  )}
                 </select>
               </div>
               {selectedBalance && (
                 <p className="text-xs text-gray-500 mt-2">
-                  Available: {selectedBalance.balance.toLocaleString()} {selectedBalance.symbol}
+                  Available: {selectedBalance.balance.toLocaleString(undefined, { maximumFractionDigits: 8 })} {selectedBalance.symbol}
                   <button
                     onClick={() =>
                       setForm({ ...form, amount: selectedBalance.balance.toString() })
@@ -222,7 +253,7 @@ export default function SendPayment() {
       )}
 
       {/* Review Step */}
-      {step === "review" && (
+      {step === 'review' && (
         <div className="space-y-4">
           <div className="nova-card space-y-4">
             <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
@@ -245,7 +276,7 @@ export default function SendPayment() {
               <div className="flex justify-between py-2 border-b border-gray-800">
                 <span className="text-sm text-gray-400">Amount</span>
                 <span className="text-sm font-semibold text-white">
-                  {parseFloat(form.amount).toLocaleString()} {form.symbol}
+                  {parseFloat(form.amount).toLocaleString(undefined, { maximumFractionDigits: 8 })} {form.symbol}
                 </span>
               </div>
               <div className="flex justify-between py-2 border-b border-gray-800">
@@ -263,15 +294,21 @@ export default function SendPayment() {
               <div className="flex justify-between py-2">
                 <span className="text-sm font-semibold text-gray-300">Total</span>
                 <span className="text-sm font-bold text-white">
-                  {(parseFloat(form.amount) + fee).toLocaleString()} {form.symbol}
+                  {(parseFloat(form.amount) + fee).toLocaleString(undefined, { maximumFractionDigits: 8 })} {form.symbol}
                 </span>
               </div>
+            </div>
+
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mt-2">
+              <p className="text-xs text-amber-400">
+                This transaction will be signed with your Ed25519 key and broadcast to the NOVA network.
+              </p>
             </div>
           </div>
 
           <div className="flex gap-3">
             <button
-              onClick={() => setStep("form")}
+              onClick={() => setStep('form')}
               className="nova-btn-secondary flex-1 py-3.5"
             >
               Back
@@ -280,27 +317,27 @@ export default function SendPayment() {
               onClick={handleConfirm}
               className="nova-btn-primary flex-1 py-3.5"
             >
-              Confirm & Send
+              Sign & Send
             </button>
           </div>
         </div>
       )}
 
       {/* Sending Step */}
-      {step === "sending" && (
+      {step === 'sending' && (
         <div className="nova-card flex flex-col items-center py-12">
           <div className="w-16 h-16 rounded-full border-4 border-nova-500 border-t-transparent animate-spin mb-6" />
           <h3 className="text-lg font-semibold text-white mb-2">
-            Processing Transaction
+            Signing & Broadcasting
           </h3>
           <p className="text-sm text-gray-400">
-            Broadcasting to the NOVA network...
+            Signing transaction and submitting to the NOVA network...
           </p>
         </div>
       )}
 
       {/* Result Step */}
-      {step === "result" && (
+      {step === 'result' && (
         <div className="space-y-4">
           <div className="nova-card flex flex-col items-center py-10">
             <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mb-5">
@@ -309,7 +346,7 @@ export default function SendPayment() {
               </svg>
             </div>
             <h3 className="text-lg font-semibold text-white mb-1">
-              Transaction Sent
+              Transaction Signed
             </h3>
             <p className="text-sm text-gray-400 mb-4">
               Your payment has been submitted to the network
@@ -319,7 +356,7 @@ export default function SendPayment() {
               <label className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
                 Transaction Hash
               </label>
-              <p className="text-xs font-mono text-gray-300 mt-1 break-all">
+              <p className="text-xs font-mono text-gray-300 mt-1 break-all select-all">
                 {txHash}
               </p>
             </div>

@@ -1,13 +1,27 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Routes, Route, NavLink, useNavigate } from "react-router-dom";
 import BlockList from "./components/BlockList";
+import BlockDetail from "./components/BlockDetail";
 import TransactionDetail from "./components/TransactionDetail";
 import AddressView from "./components/AddressView";
 import NetworkStats from "./components/NetworkStats";
+import { useExplorerStore } from "./store/explorerStore";
 
 export default function App() {
   const navigate = useNavigate();
   const [globalSearch, setGlobalSearch] = useState("");
+  const { status, connected, startPolling, stopPolling, connectWs, disconnectWs } =
+    useExplorerStore();
+
+  // Start polling and WebSocket on mount.
+  useEffect(() => {
+    startPolling();
+    connectWs();
+    return () => {
+      stopPolling();
+      disconnectWs();
+    };
+  }, [startPolling, stopPolling, connectWs, disconnectWs]);
 
   const handleGlobalSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -16,11 +30,10 @@ export default function App() {
 
     if (q.startsWith("nova1")) {
       navigate(`/address/${q}`);
-    } else if (q.startsWith("0x")) {
+    } else if (q.startsWith("0x") || /^[0-9a-fA-F]{16,}$/.test(q)) {
       navigate(`/tx/${q}`);
     } else if (/^\d+$/.test(q)) {
-      // Block height: for now, just go to blocks view
-      navigate("/");
+      navigate(`/block/${q}`);
     }
     setGlobalSearch("");
   };
@@ -60,7 +73,7 @@ export default function App() {
                   type="text"
                   value={globalSearch}
                   onChange={(e) => setGlobalSearch(e.target.value)}
-                  placeholder="Search by address, tx hash, or block..."
+                  placeholder="Search by address, tx hash, or block height..."
                   className="w-full bg-gray-800/80 border border-gray-700/50 rounded-xl pl-11 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-nova-500 focus:border-transparent transition-all"
                 />
               </div>
@@ -68,8 +81,22 @@ export default function App() {
 
             {/* Network Badge */}
             <div className="hidden sm:flex items-center gap-2 shrink-0">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs text-emerald-400 font-medium">Mainnet</span>
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  connected ? "bg-emerald-400 animate-pulse" : "bg-red-400"
+                }`}
+              />
+              <span
+                className={`text-xs font-medium ${
+                  connected ? "text-emerald-400" : "text-red-400"
+                }`}
+              >
+                {connected
+                  ? status?.network
+                    ? status.network.charAt(0).toUpperCase() + status.network.slice(1)
+                    : "Connected"
+                  : "Disconnected"}
+              </span>
             </div>
           </div>
 
@@ -114,6 +141,7 @@ export default function App() {
       <main className="max-w-6xl mx-auto px-4 py-6">
         <Routes>
           <Route path="/" element={<BlockList />} />
+          <Route path="/block/:height" element={<BlockDetail />} />
           <Route path="/tx/:hash" element={<TransactionDetail />} />
           <Route path="/address/:addr" element={<AddressView />} />
           <Route path="/stats" element={<NetworkStats />} />
@@ -124,14 +152,21 @@ export default function App() {
       <footer className="border-t border-gray-800/50 mt-12">
         <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-xs text-gray-600">
-            NOVA Protocol Explorer &middot; Powered by NOVA v1
+            NOVA Protocol Explorer &middot; Powered by NOVA{" "}
+            {status?.version ? `v${status.version}` : ""}
           </p>
           <div className="flex items-center gap-4 text-xs text-gray-600">
-            <span>Block Height: #1,847,293</span>
+            <span>
+              Block Height: #{status?.block_height?.toLocaleString() ?? "..."}
+            </span>
             <span>&middot;</span>
-            <span>TPS: 1,247</span>
+            <span>
+              Peers: {status?.peer_count?.toLocaleString() ?? "..."}
+            </span>
             <span>&middot;</span>
-            <span>Validators: 128</span>
+            <span>
+              {status?.synced ? "Synced" : "Syncing..."}
+            </span>
           </div>
         </div>
       </footer>
