@@ -2,7 +2,7 @@
 
 Provides everything needed to interact with the NOVA network from Python:
 identity management, transaction building, wallet operations, and an async
-client for the JSON-RPC node API.
+client for the node HTTP and JSON-RPC API.
 
 Quick start::
 
@@ -16,10 +16,16 @@ Quick start::
 """
 
 from nova_sdk.client import (
+    AccountResponse,
+    BlockResponse,
     NovaClient,
+    NovaClientError,
     NovaConnectionError,
-    NovaRPCError,
-    NovaTimeoutError,
+    NovaNotFoundError,
+    NovaRpcError,
+    SendTransactionResponse,
+    StatusResponse,
+    TransactionResponse,
 )
 from nova_sdk.identity import (
     create_nova_id,
@@ -58,9 +64,16 @@ from nova_sdk.wallet import NovaWallet
 __all__ = [
     # Client
     "NovaClient",
+    "NovaClientError",
     "NovaConnectionError",
-    "NovaRPCError",
-    "NovaTimeoutError",
+    "NovaNotFoundError",
+    "NovaRpcError",
+    # Client response models
+    "AccountResponse",
+    "BlockResponse",
+    "SendTransactionResponse",
+    "StatusResponse",
+    "TransactionResponse",
     # Identity
     "create_nova_id",
     "generate_keypair",

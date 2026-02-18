@@ -51,4 +51,4 @@ pub use mempool::{Mempool, MempoolConfig, MempoolEntry, MempoolError};
 pub use node::{NodeStatus, ValidatorNode};
 pub use producer::{BlockProducer, BlockProductionError, ProducedBlock, TxResult};
 pub use rpc::{RpcError, RpcMethod, RpcRequest, RpcResponse};
-pub use sync::{SyncProtocol, SyncRequest, SyncResponse};
+pub use sync::{SyncConfig, SyncEngine, SyncError, SyncRequest, SyncResponse, SyncResult};

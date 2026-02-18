@@ -1,17 +1,29 @@
 """Tests for client, wallet, and transaction construction.
 
 These tests exercise the public API surface without hitting a real NOVA
-node. Network-dependent methods are covered by integration tests (not
-included here).
+node. HTTP-level client methods are verified via httpx.MockTransport.
 """
 
 from __future__ import annotations
 
+import json
 import struct
 
+import httpx
 import pytest
 
-from nova_sdk.client import NovaClient
+from nova_sdk.client import (
+    AccountResponse,
+    BlockResponse,
+    NovaClient,
+    NovaClientError,
+    NovaConnectionError,
+    NovaNotFoundError,
+    NovaRpcError,
+    SendTransactionResponse,
+    StatusResponse,
+    TransactionResponse,
+)
 from nova_sdk.identity import create_nova_id, generate_keypair, keypair_from_seed
 from nova_sdk.transaction import (
     TransactionBuilder,
@@ -31,6 +43,148 @@ from nova_sdk.wallet import NovaWallet
 
 
 # ---------------------------------------------------------------------------
+# Mock transport helpers
+# ---------------------------------------------------------------------------
+
+# Sample JSON payloads used by the HTTP tests.
+
+_STATUS_JSON = {
+    "version": "0.1.0",
+    "network": "devnet",
+    "block_height": 42,
+    "peer_count": 5,
+    "synced": True,
+    "timestamp": "2024-01-01T00:00:00Z",
+}
+
+_BLOCK_JSON = {
+    "height": 10,
+    "hash": "ab" * 32,
+    "parent_hash": "cd" * 32,
+    "proposer": "nova1validator",
+    "tx_count": 3,
+    "timestamp": 1700000000,
+}
+
+_TX_JSON = {
+    "hash": "ee" * 32,
+    "sender": "nova1alice",
+    "recipient": "nova1bob",
+    "amount": 500_000,
+    "fee": 100,
+    "block_height": 10,
+    "status": "confirmed",
+    "timestamp": 1700000000,
+}
+
+_ACCOUNT_JSON = {
+    "address": "nova1alice",
+    "balance": 1_000_000,
+    "nonce": 7,
+    "tx_count": 7,
+}
+
+_SEND_TX_RESULT = {
+    "tx_hash": "ff" * 32,
+    "status": "pending",
+}
+
+
+def _make_rpc_response(result: object = None, error: object = None, req_id: int = 1) -> dict:
+    resp: dict = {"jsonrpc": "2.0", "id": req_id}
+    if error is not None:
+        resp["error"] = error
+    else:
+        resp["result"] = result
+    return resp
+
+
+def _rest_handler(request: httpx.Request) -> httpx.Response:
+    """Mock transport handler for REST endpoints."""
+    path = request.url.path
+
+    if path == "/health":
+        return httpx.Response(200, json={"status": "ok"})
+
+    if path == "/status":
+        return httpx.Response(200, json=_STATUS_JSON)
+
+    if path.startswith("/blocks/"):
+        height = path.split("/")[-1]
+        if height == "999":
+            return httpx.Response(404, json={"error": "Block not found at height 999"})
+        return httpx.Response(200, json=_BLOCK_JSON)
+
+    if path.startswith("/transactions/"):
+        tx_hash = path.split("/")[-1]
+        if tx_hash == "missing":
+            return httpx.Response(404, json={"error": "Transaction not found: missing"})
+        return httpx.Response(200, json=_TX_JSON)
+
+    if path.startswith("/accounts/"):
+        return httpx.Response(200, json=_ACCOUNT_JSON)
+
+    if path == "/rpc" and request.method == "POST":
+        body = json.loads(request.content)
+        method = body.get("method", "")
+        req_id = body.get("id", 1)
+
+        if method == "nova_blockHeight":
+            return httpx.Response(200, json=_make_rpc_response(result=42, req_id=req_id))
+
+        if method == "nova_peerCount":
+            return httpx.Response(200, json=_make_rpc_response(result=5, req_id=req_id))
+
+        if method == "nova_networkId":
+            return httpx.Response(200, json=_make_rpc_response(result="devnet", req_id=req_id))
+
+        if method == "nova_version":
+            return httpx.Response(200, json=_make_rpc_response(result="0.1.0", req_id=req_id))
+
+        if method == "nova_getBalance":
+            return httpx.Response(
+                200,
+                json=_make_rpc_response(result={"balance": 1_000_000}, req_id=req_id),
+            )
+
+        if method == "nova_sendTransaction":
+            return httpx.Response(
+                200,
+                json=_make_rpc_response(result=_SEND_TX_RESULT, req_id=req_id),
+            )
+
+        if method == "nova_errorMethod":
+            return httpx.Response(
+                200,
+                json=_make_rpc_response(
+                    error={"code": -32001, "message": "Something went wrong"},
+                    req_id=req_id,
+                ),
+            )
+
+        return httpx.Response(
+            200,
+            json=_make_rpc_response(
+                error={"code": -32601, "message": f"Method not found: {method}"},
+                req_id=req_id,
+            ),
+        )
+
+    return httpx.Response(404, json={"error": "not found"})
+
+
+def _build_mock_client(handler=_rest_handler) -> NovaClient:
+    """Create a NovaClient backed by a mock transport (no real I/O)."""
+    transport = httpx.MockTransport(handler)
+    client = NovaClient("http://localhost:9070")
+    client._client = httpx.AsyncClient(
+        transport=transport,
+        base_url="http://localhost:9070",
+    )
+    return client
+
+
+# ---------------------------------------------------------------------------
 # NovaClient construction
 # ---------------------------------------------------------------------------
 
@@ -38,23 +192,267 @@ from nova_sdk.wallet import NovaWallet
 class TestClientConstruction:
     """Verify NovaClient initialises correctly without I/O."""
 
-    def test_basic_url(self) -> None:
+    def test_client_construction(self) -> None:
         client = NovaClient("http://localhost:9070")
-        assert client._node_url == "http://localhost:9070"
+        assert client._base_url == "http://localhost:9070"
 
     def test_trailing_slash_stripped(self) -> None:
         client = NovaClient("http://localhost:9070/")
-        assert client._node_url == "http://localhost:9070"
+        assert client._base_url == "http://localhost:9070"
 
     def test_custom_timeout(self) -> None:
         client = NovaClient("http://localhost:9070", timeout=5.0)
         assert client._timeout == 5.0
+
+    def test_custom_retries(self) -> None:
+        client = NovaClient("http://localhost:9070", retries=5)
+        assert client._retries == 5
 
     def test_request_id_increments(self) -> None:
         client = NovaClient("http://localhost:9070")
         id1 = client._next_id()
         id2 = client._next_id()
         assert id2 == id1 + 1
+
+
+# ---------------------------------------------------------------------------
+# NovaClient REST endpoint tests
+# ---------------------------------------------------------------------------
+
+
+class TestClientRest:
+    """REST endpoint tests with mocked HTTP transport."""
+
+    @pytest.mark.asyncio
+    async def test_health_returns_true(self) -> None:
+        client = _build_mock_client()
+        result = await client.health()
+        assert result is True
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_health_returns_false_on_error(self) -> None:
+        def error_handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("connection refused")
+
+        client = _build_mock_client(handler=error_handler)
+        result = await client.health()
+        assert result is False
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_status(self) -> None:
+        client = _build_mock_client()
+        status = await client.get_status()
+        assert isinstance(status, StatusResponse)
+        assert status.version == "0.1.0"
+        assert status.network == "devnet"
+        assert status.block_height == 42
+        assert status.peer_count == 5
+        assert status.synced is True
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_block(self) -> None:
+        client = _build_mock_client()
+        block = await client.get_block(10)
+        assert isinstance(block, BlockResponse)
+        assert block.height == 10
+        assert block.tx_count == 3
+        assert block.proposer == "nova1validator"
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_block_not_found(self) -> None:
+        client = _build_mock_client()
+        with pytest.raises(NovaNotFoundError) as exc_info:
+            await client.get_block(999)
+        assert exc_info.value.status_code == 404
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_transaction(self) -> None:
+        client = _build_mock_client()
+        tx = await client.get_transaction("ee" * 32)
+        assert isinstance(tx, TransactionResponse)
+        assert tx.hash == "ee" * 32
+        assert tx.sender == "nova1alice"
+        assert tx.recipient == "nova1bob"
+        assert tx.amount == 500_000
+        assert tx.fee == 100
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_account(self) -> None:
+        client = _build_mock_client()
+        account = await client.get_account("nova1alice")
+        assert isinstance(account, AccountResponse)
+        assert account.address == "nova1alice"
+        assert account.balance == 1_000_000
+        assert account.nonce == 7
+        await client.close()
+
+
+# ---------------------------------------------------------------------------
+# NovaClient JSON-RPC tests
+# ---------------------------------------------------------------------------
+
+
+class TestClientRpc:
+    """JSON-RPC endpoint tests with mocked HTTP transport."""
+
+    @pytest.mark.asyncio
+    async def test_get_block_height_rpc(self) -> None:
+        client = _build_mock_client()
+        height = await client.get_block_height()
+        assert height == 42
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_peer_count_rpc(self) -> None:
+        client = _build_mock_client()
+        count = await client.get_peer_count()
+        assert count == 5
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_network_id_rpc(self) -> None:
+        client = _build_mock_client()
+        network = await client.get_network_id()
+        assert network == "devnet"
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_version_rpc(self) -> None:
+        client = _build_mock_client()
+        version = await client.get_version()
+        assert version == "0.1.0"
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_balance_rpc(self) -> None:
+        client = _build_mock_client()
+        balance = await client.get_balance("nova1alice")
+        assert balance == 1_000_000
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_send_transaction_rpc(self) -> None:
+        client = _build_mock_client()
+        sk, pk = generate_keypair()
+        sender_addr = create_nova_id(pk)
+        _, rpk = generate_keypair()
+        receiver_addr = create_nova_id(rpk)
+
+        tx = (
+            TransactionBuilder()
+            .type(TransactionType.TRANSFER)
+            .sender(sender_addr)
+            .receiver(receiver_addr)
+            .amount(100_000, "NOVA")
+            .fee(10)
+            .nonce(0)
+            .build()
+        )
+        resp = await client.send_transaction(tx)
+        assert isinstance(resp, SendTransactionResponse)
+        assert resp.tx_hash == "ff" * 32
+        assert resp.status == "pending"
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_rpc_error_handling(self) -> None:
+        client = _build_mock_client()
+        with pytest.raises(NovaRpcError) as exc_info:
+            await client._rpc_call("nova_errorMethod")
+        assert exc_info.value.code == -32001
+        assert "Something went wrong" in exc_info.value.message
+        await client.close()
+
+
+# ---------------------------------------------------------------------------
+# Connection error tests
+# ---------------------------------------------------------------------------
+
+
+class TestClientErrors:
+    """Error propagation tests."""
+
+    @pytest.mark.asyncio
+    async def test_connection_error(self) -> None:
+        def error_handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("connection refused")
+
+        client = _build_mock_client(handler=error_handler)
+        with pytest.raises(NovaConnectionError):
+            await client.get_status()
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_context_manager(self) -> None:
+        transport = httpx.MockTransport(_rest_handler)
+        client = NovaClient("http://localhost:9070")
+        client._client = httpx.AsyncClient(
+            transport=transport,
+            base_url="http://localhost:9070",
+        )
+        async with client as c:
+            assert c is client
+            status = await c.get_status()
+            assert status.block_height == 42
+        # After exiting the context, the inner client should be closed.
+        assert client._client.is_closed
+
+
+# ---------------------------------------------------------------------------
+# Response model validation
+# ---------------------------------------------------------------------------
+
+
+class TestResponseModels:
+    """Pydantic model validation for response types."""
+
+    def test_status_response_validation(self) -> None:
+        model = StatusResponse.model_validate(_STATUS_JSON)
+        assert model.version == "0.1.0"
+        assert model.block_height == 42
+
+    def test_block_response_validation(self) -> None:
+        model = BlockResponse.model_validate(_BLOCK_JSON)
+        assert model.height == 10
+        assert model.tx_count == 3
+
+    def test_transaction_response_validation(self) -> None:
+        model = TransactionResponse.model_validate(_TX_JSON)
+        assert model.hash == "ee" * 32
+        assert model.amount == 500_000
+
+    def test_account_response_validation(self) -> None:
+        model = AccountResponse.model_validate(_ACCOUNT_JSON)
+        assert model.address == "nova1alice"
+        assert model.balance == 1_000_000
+
+    def test_send_transaction_response_validation(self) -> None:
+        model = SendTransactionResponse.model_validate(_SEND_TX_RESULT)
+        assert model.tx_hash == "ff" * 32
+        assert model.status == "pending"
+
+    def test_block_response_defaults(self) -> None:
+        minimal = {"height": 0, "hash": "a", "parent_hash": "b", "proposer": "c", "tx_count": 0, "timestamp": 0}
+        model = BlockResponse.model_validate(minimal)
+        assert model.state_root == ""
+
+    def test_transaction_response_defaults(self) -> None:
+        minimal = {"hash": "a", "sender": "b", "recipient": "c", "amount": 0, "fee": 0}
+        model = TransactionResponse.model_validate(minimal)
+        assert model.block_height == 0
+        assert model.status == "Pending"
+        assert model.timestamp == 0
+
+    def test_error_hierarchy(self) -> None:
+        assert issubclass(NovaConnectionError, NovaClientError)
+        assert issubclass(NovaNotFoundError, NovaClientError)
+        assert issubclass(NovaRpcError, NovaClientError)
 
 
 # ---------------------------------------------------------------------------
