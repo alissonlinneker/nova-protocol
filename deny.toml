@@ -26,7 +26,6 @@ allow = [
     "OpenSSL",
     "BlueOak-1.0.0",
 ]
-copyleft = "deny"
 
 [[licenses.clarify]]
 name = "ring"
