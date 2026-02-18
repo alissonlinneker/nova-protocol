@@ -669,22 +669,23 @@ fn db_persistence_survives_reopen() {
     let genesis = Block::genesis();
     let account = AccountState::with_balance(7_777);
 
-    // First session: write data.
-    {
-        let db = NovaDB::open(dir.path()).expect("open db");
-        db.put_block(&genesis).unwrap();
+    // First session: write data and explicitly drop before reopening.
+    let db = NovaDB::open(dir.path()).expect("open db");
+    db.put_block(&genesis).unwrap();
 
-        let block1 = Block::new(
-            &genesis,
-            vec![],
-            "nova1validator_test".to_string(),
-            [42u8; 32],
-        );
-        db.put_block(&block1).unwrap();
-        db.put_account("nova1test_user", &account).unwrap();
-        db.flush().unwrap();
-    }
-    // db is dropped here.
+    let block1 = Block::new(
+        &genesis,
+        vec![],
+        "nova1validator_test".to_string(),
+        [42u8; 32],
+    );
+    db.put_block(&block1).unwrap();
+    db.put_account("nova1test_user", &account).unwrap();
+    db.flush().unwrap();
+    drop(db);
+
+    // Brief wait for sled to release the file lock.
+    std::thread::sleep(std::time::Duration::from_millis(50));
 
     // Second session: reopen and verify data survived.
     {
